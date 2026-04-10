@@ -15,6 +15,8 @@ cd infra/stun-docker
 docker compose up -d
 ```
 
+如果你用默认 bridge 网络，别直接原样启动生产实例，先把下面的 `external-ip` 和 `relay-ip` 配好。
+
 ## Docker bridge 关键注意
 
 如果容器跑在默认 bridge 网络，TURN 中继经常会失败，常见原因是 coturn 对外通告了不可达地址。
@@ -46,10 +48,10 @@ relay-ip=172.18.0.2
 示例配置里默认是：
 
 ```text
-user=chatuser:change-this-password
+user=chatuser:230f0dae70e9e406539759bf970b481f
 ```
 
-上线前必须修改。
+这是示例里预生成的一组随机初始密码，方便你先拉起服务；真正上线前仍建议替换成你自己的值。
 
 ## 无后端时的安全边界
 
@@ -69,7 +71,7 @@ user=chatuser:change-this-password
 VITE_STUN_SERVERS=stun:YOUR_PUBLIC_IP:3478
 VITE_TURN_URLS=turn:YOUR_PUBLIC_IP:3478?transport=udp,turn:YOUR_PUBLIC_IP:3478?transport=tcp
 VITE_TURN_USERNAME=chatuser
-VITE_TURN_CREDENTIAL=change-this-password
+VITE_TURN_CREDENTIAL=230f0dae70e9e406539759bf970b481f
 VITE_PREFER_TURN=true
 ```
 

@@ -51,6 +51,7 @@ VITE_INVITE_TTL_MS=43200000
 
 说明：
 
+- `VITE_RELAY_URLS` 留空时，会使用 `trystero` 内置的公开 relay 列表；只有你想强制指定自己的 relay 时才需要填写。
 - 不配置 TURN 时，应用只会走 STUN。
 - 配置 TURN 后，前端会先尝试 `relay` 路径，再自动回退到混合模式。
 - 是否最终选中 TURN / STUN，也仍然受浏览器 ICE 行为和实际网络环境影响。
