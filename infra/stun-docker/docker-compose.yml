@@ -3,11 +3,8 @@ services:
     image: coturn/coturn:4.6.3
     container_name: web3-chat-turn-stun
     restart: unless-stopped
+    network_mode: host
     command: ["-c", "/etc/coturn/turnserver.conf"]
-    ports:
-      - "3478:3478/tcp"
-      - "3478:3478/udp"
-      - "49160-49200:49160-49200/udp"
     volumes:
       - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
     read_only: true
@@ -20,7 +17,6 @@ services:
     tmpfs:
       - /var/tmp
 
-# If relay fails under Docker bridge, use one of:
-# 1) Configure external-ip/relay-ip in turnserver.conf.
-# 2) Or switch to host networking (Linux):
-#    network_mode: host
+# Linux server default:
+# - host networking avoids Docker bridge/NAT issues for TURN relay.
+# - open 3478/tcp, 3478/udp, 49160-49200/udp in your firewall/security group.

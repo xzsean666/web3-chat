@@ -15,13 +15,20 @@ cd infra/stun-docker
 docker compose up -d
 ```
 
-如果你用默认 bridge 网络，别直接原样启动生产实例，先把下面的 `external-ip` 和 `relay-ip` 配好。
+当前示例默认按 Linux 服务器上的 `network_mode: host` 编排，优先避免 TURN 在 Docker bridge 下通告内网地址的问题。
+
+上线前至少确认：
+
+- `turnserver.conf` 里的 `external-ip` 已改成你的公网 IP：`47.109.17.166`
+- `3478/tcp`
+- `3478/udp`
+- `49160-49200/udp`
 
 ## Docker bridge 关键注意
 
-如果容器跑在默认 bridge 网络，TURN 中继经常会失败，常见原因是 coturn 对外通告了不可达地址。
+如果你后面改回默认 bridge 网络，TURN 中继经常会失败，常见原因是 coturn 对外通告了不可达地址。
 
-上线前请编辑 `turnserver.conf`，至少确认以下字段：
+这时至少确认以下字段：
 
 ```text
 external-ip=<PUBLIC_IP>/<DOCKER_BRIDGE_IP>
