@@ -1,85 +1,92 @@
-import { computed, markRaw, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import type {
-  ActionSender,
-  HandshakePayload,
-  Room as TrysteroRoom,
-} from 'trystero'
+import { appConfig, buildRtcConfig } from '../utils/config'
+import { clampText, parseIsoDate } from '../utils/format'
 import {
-  appConfig,
-  getFallbackTransportMode,
-  getPreferredTransportMode,
-  getRtcConfig,
-} from '../utils/config'
-import { clampText, formatDateTime, parseIsoDate } from '../utils/format'
+  acceptFriendRequest as acceptFriendRequestApi,
+  buildBackendWsUrl,
+  createBackendSession,
+  createGroup as createGroupApi,
+  fetchFriends,
+  fetchGroups,
+  fetchMe,
+  fetchTurnCredentials,
+  revokeBackendSession,
+  sendFriendRequest as sendFriendRequestApi,
+} from '../utils/backend'
 import {
-  buildInviteLink,
-  consumeInviteFromLocation,
-  generateRoomId,
-  generateRoomSecret,
-  isInviteExpired,
-  parseInvitePayload,
-  sanitizeRoomTitle,
-} from '../utils/invite'
-import {
+  clearPersistedSession,
   loadPersistedState,
   loadSessionIdentity,
   savePersistedState,
   saveSessionIdentity,
 } from '../utils/storage'
+import { createMessageAuthTag, verifyMessageAuthTag } from '../utils/security'
 import {
-  createMessageAuthTag,
-  signPayload,
-  verifyMessageAuthTag,
-  verifyPayloadSignature,
-} from '../utils/security'
-import {
+  connectTestIdentity as createTestIdentity,
   connectWalletIdentity,
   shortAddress,
-  toSharedWalletIdentity,
-  verifyWalletIdentity,
 } from '../utils/wallet'
+import { generateUuid } from '../utils/uuid'
 import type {
+  BackendUser,
   ChatMessage,
-  ChatReceiptWire,
+  ChatMessageStatus,
   ChatWireMessage,
   ConnectionState,
-  HandshakeAck,
-  HandshakeFinalize,
-  HandshakeHello,
-  HandshakeRoomContext,
-  InvitePayload,
-  KnownRoom,
+  ConversationSummary,
+  FriendRecord,
+  GroupRecord,
+  IdentityAuthMethod,
   PeerProfile,
   PersistedState,
-  RoomKind,
-  SharedWalletIdentity,
-  TransportMode,
   WalletIdentity,
 } from '../types/chat'
 
-type ActiveRoomRuntime = {
-  roomId: string
-  room: TrysteroRoom
-  sendChat: ActionSender<ChatWireMessage>
-  transportMode: TransportMode
+type SignalPeerDescriptor = {
+  connectionId: string
+  userId: number
+  address: `0x${string}`
+  authMethod: IdentityAuthMethod
+  sessionId: string
+  sessionPublicKey: string
+  connectedAt: string
 }
 
-let trysteroModulePromise: Promise<typeof import('trystero')> | null = null
+type RoomSubscribedPayload = {
+  type: 'room.subscribed'
+  roomKey: string
+  roomType: 'direct' | 'group'
+  peers: SignalPeerDescriptor[]
+}
 
-type HandshakeSignaturePayload = {
-  type: 'peer-handshake'
-  appId: string
-  roomId: string
-  roomKind: RoomKind
-  peerLimit: number
-  expiresAt: string
-  signerAddress: `0x${string}`
-  signerSessionId: string
-  audienceAddress: `0x${string}`
-  audienceSessionId: string
-  signerChallenge: string
-  audienceChallenge: string
+type PeerJoinedPayload = {
+  type: 'peer.joined'
+  roomKey: string
+  peer: SignalPeerDescriptor
+}
+
+type PeerLeftPayload = {
+  type: 'peer.left'
+  roomKey: string
+  peer: SignalPeerDescriptor
+}
+
+type SignalPayload = {
+  roomKey: string
+  from: SignalPeerDescriptor
+  description?: RTCSessionDescriptionInit
+  candidate?: RTCIceCandidateInit
+}
+
+type PeerRuntime = {
+  key: string
+  conversationId: string
+  peer: SignalPeerDescriptor
+  pc: RTCPeerConnection
+  channel: RTCDataChannel | null
+  isInitiator: boolean
+  pendingCandidates: RTCIceCandidateInit[]
 }
 
 function createInitialState(): PersistedState {
@@ -90,23 +97,24 @@ function createInitialState(): PersistedState {
   }
 }
 
-function loadTrystero() {
-  trysteroModulePromise ??= import('trystero')
-  return trysteroModulePromise
-}
-
-function toRoomPreview(messages: ChatMessage[] | undefined, hasSecret: boolean) {
-  const latestMessage = messages?.at(-1)
-
-  if (latestMessage) {
-    return clampText(latestMessage.text, 32)
-  }
-
-  return hasSecret ? '等待新消息' : '当前设备仅保留房间索引'
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object'
+}
+
+function isSignalPeerDescriptor(value: unknown): value is SignalPeerDescriptor {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    typeof value.connectionId === 'string' &&
+    typeof value.userId === 'number' &&
+    typeof value.address === 'string' &&
+    (value.authMethod === 'wallet' || value.authMethod === 'guest') &&
+    typeof value.sessionId === 'string' &&
+    typeof value.sessionPublicKey === 'string' &&
+    typeof value.connectedAt === 'string'
+  )
 }
 
 function isChatWireMessage(value: unknown): value is ChatWireMessage {
@@ -126,371 +134,363 @@ function isChatWireMessage(value: unknown): value is ChatWireMessage {
   )
 }
 
-function isChatReceiptWire(value: unknown): value is ChatReceiptWire {
-  if (!isRecord(value)) {
-    return false
+function createDirectConversationId(addressA: string, addressB: string) {
+  return `direct:${[addressA.toLowerCase(), addressB.toLowerCase()].sort().join(':')}`
+}
+
+function createGroupConversationId(groupId: string) {
+  return `group:${groupId}`
+}
+
+function compareDatesDesc(left?: string, right?: string) {
+  const leftTime = parseIsoDate(left ?? '')?.getTime() ?? 0
+  const rightTime = parseIsoDate(right ?? '')?.getTime() ?? 0
+  return rightTime - leftTime
+}
+
+function countUniqueUsers(peers: SignalPeerDescriptor[]) {
+  return new Set(peers.map((peer) => peer.userId)).size
+}
+
+function normalizePeers(peers: SignalPeerDescriptor[], selfConnectionId?: string) {
+  const byConnectionId = new Map<string, SignalPeerDescriptor>()
+
+  for (const peer of peers) {
+    if (peer.connectionId === selfConnectionId) {
+      continue
+    }
+
+    byConnectionId.set(peer.connectionId, peer)
   }
 
-  return (
-    typeof value.roomId === 'string' &&
-    typeof value.messageId === 'string' &&
-    typeof value.senderSessionId === 'string' &&
-    typeof value.recipientSessionId === 'string' &&
-    typeof value.receivedAt === 'string'
+  return [...byConnectionId.values()].sort((left, right) =>
+    compareDatesDesc(right.connectedAt, left.connectedAt),
   )
 }
 
-function isHandshakeRoomContext(
-  value: unknown,
-): value is HandshakeRoomContext {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return (
-    value.version === 1 &&
-    typeof value.appId === 'string' &&
-    typeof value.roomId === 'string' &&
-    (value.roomKind === 'private' || value.roomKind === 'group') &&
-    typeof value.peerLimit === 'number' &&
-    typeof value.expiresAt === 'string'
-  )
+function stringifyError(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback
 }
 
-function isSharedWalletIdentity(value: unknown): value is SharedWalletIdentity {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return (
-    typeof value.address === 'string' &&
-    typeof value.chainId === 'number' &&
-    typeof value.signature === 'string' &&
-    typeof value.message === 'string' &&
-    typeof value.issuedAt === 'string' &&
-    typeof value.nonce === 'string' &&
-    typeof value.sessionId === 'string' &&
-    typeof value.domain === 'string' &&
-    typeof value.origin === 'string' &&
-    typeof value.uri === 'string' &&
-    typeof value.appId === 'string' &&
-    typeof value.sessionPublicKey === 'string'
-  )
+function hasTurnServer(iceServers: RTCIceServer[]) {
+  return iceServers.some((server) => {
+    const urls = Array.isArray(server.urls) ? server.urls : [server.urls]
+    return urls.some((url) => url.startsWith('turn:') || url.startsWith('turns:'))
+  })
 }
 
-function isHandshakeHello(value: unknown): value is HandshakeHello {
-  if (!isHandshakeRoomContext(value) || !isRecord(value)) {
-    return false
+function toSessionDescription(description: RTCSessionDescription | null) {
+  if (!description) {
+    return null
   }
 
-  return (
-    value.step === 'hello' &&
-    typeof value.address === 'string' &&
-    typeof value.label === 'string' &&
-    typeof value.sessionId === 'string' &&
-    typeof value.challenge === 'string' &&
-    isSharedWalletIdentity(value.proof)
-  )
+  return {
+    type: description.type,
+    sdp: description.sdp ?? '',
+  } satisfies RTCSessionDescriptionInit
 }
 
-function isHandshakeAck(value: unknown): value is HandshakeAck {
-  if (!isHandshakeRoomContext(value) || !isRecord(value)) {
-    return false
+function parseDataMessage(rawData: string | ArrayBuffer | Blob) {
+  if (typeof rawData === 'string') {
+    return rawData
   }
 
-  return (
-    value.step === 'ack' &&
-    typeof value.address === 'string' &&
-    typeof value.label === 'string' &&
-    typeof value.sessionId === 'string' &&
-    typeof value.challenge === 'string' &&
-    typeof value.responseSignature === 'string' &&
-    isSharedWalletIdentity(value.proof)
-  )
-}
-
-function isHandshakeFinalize(value: unknown): value is HandshakeFinalize {
-  if (!isHandshakeRoomContext(value) || !isRecord(value)) {
-    return false
+  if (rawData instanceof ArrayBuffer) {
+    return new TextDecoder().decode(rawData)
   }
 
-  return (
-    value.step === 'finalize' &&
-    typeof value.address === 'string' &&
-    typeof value.sessionId === 'string' &&
-    typeof value.responseSignature === 'string'
-  )
-}
-
-function getDerivedLabel(address: string) {
-  return shortAddress(address)
+  return null
 }
 
 export const useChatAppStore = defineStore('chatApp', () => {
   const initialState = createInitialState()
 
   const identity = ref<WalletIdentity | null>(initialState.identity)
-  const rooms = ref<KnownRoom[]>(initialState.rooms)
-  const messagesByRoom = ref<Record<string, ChatMessage[]>>(
-    initialState.messagesByRoom,
+  const authToken = ref<string | null>(initialState.authToken)
+  const authExpiresAt = ref<string | null>(initialState.authExpiresAt)
+  const me = ref<BackendUser | null>(null)
+  const messagesByConversation = ref<Record<string, ChatMessage[]>>(
+    initialState.messagesByConversation,
   )
-  const initialRoomId =
-    initialState.rooms.find((room) => room.roomId === initialState.currentRoomId)?.roomId ??
-    initialState.rooms[0]?.roomId ??
-    null
-  const currentRoomId = ref<string | null>(
-    initialRoomId,
+  const currentConversationId = ref<string | null>(
+    initialState.currentConversationId,
   )
-  const peerProfilesMap = ref<Record<string, PeerProfile>>({})
-  const connectionState = ref<ConnectionState>('idle')
-  const roomErrorMessage = ref('')
-  const walletErrorMessage = ref('')
+  const acceptedFriends = ref<FriendRecord[]>([])
+  const pendingInbound = ref<FriendRecord[]>([])
+  const pendingOutbound = ref<FriendRecord[]>([])
+  const groups = ref<GroupRecord[]>([])
   const walletBusy = ref(false)
+  const walletErrorMessage = ref('')
+  const roomErrorMessage = ref('')
   const sendBusy = ref(false)
-  const initialized = ref(false)
-  const activeRoom = ref<ActiveRoomRuntime | null>(null)
-  const transportMode = ref<TransportMode>(getPreferredTransportMode())
+  const connectionState = ref<ConnectionState>('idle')
+  const conversationPeers = ref<Record<string, SignalPeerDescriptor[]>>({})
+  const iceServers = ref<RTCIceServer[]>(appConfig.fallbackIceServers)
+  const wsConnected = ref(false)
 
-  let fallbackTimer: number | null = null
-  let connectionAttempt = 0
+  let turnExpiresAt = 0
+  let ws: WebSocket | null = null
+  let wsConnectPromise: Promise<void> | null = null
+  let resolveWsConnect: (() => void) | null = null
+  let rejectWsConnect: ((error: Error) => void) | null = null
+  let wsPingTimer: number | null = null
+  let wsReconnectTimer: number | null = null
+  let directoryRefreshTimer: number | null = null
+  let refreshingDirectory = false
+  let selfConnection: SignalPeerDescriptor | null = null
+  let allowSocketReconnect = false
 
-  const identityLabel = computed(() =>
-    identity.value ? shortAddress(identity.value.address) : '未连接钱包',
-  )
+  const joinedRooms = new Set<string>()
+  const pendingRoomSubscriptions = new Set<string>()
+  const peerRuntimes = new Map<string, PeerRuntime>()
 
-  const transportLabel = computed(() => {
-    if (transportMode.value === 'turn-only') {
-      return 'Relay Only'
+  const testIdentityEnabled = appConfig.enableTestIdentity
+  const maxMessageLength = appConfig.maxMessageLength
+
+  const sortedConversations = computed<ConversationSummary[]>(() => {
+    const selfAddress = identity.value?.address ?? me.value?.address
+
+    if (!selfAddress) {
+      return []
     }
 
-    if (transportMode.value === 'hybrid') {
-      return 'TURN + STUN'
-    }
+    const directConversations = acceptedFriends.value.map((record) => {
+      const conversationId = createDirectConversationId(
+        selfAddress,
+        record.friend.address,
+      )
+      const latestMessage = messagesByConversation.value[conversationId]?.at(-1)
+      const onlineCount = countUniqueUsers(
+        conversationPeers.value[conversationId] ?? [],
+      )
 
-    return 'STUN'
+      return {
+        id: conversationId,
+        title: shortAddress(record.friend.address),
+        kind: 'private',
+        directAddress: record.friend.address,
+        lastMessageAt: latestMessage?.createdAt ?? record.updatedAt,
+        onlineCount: onlineCount || (record.online ? 1 : 0),
+      } satisfies ConversationSummary
+    })
+
+    const groupConversations = groups.value.map((group) => {
+      const conversationId = createGroupConversationId(group.id)
+      const latestMessage = messagesByConversation.value[conversationId]?.at(-1)
+      const onlineCount = countUniqueUsers(
+        conversationPeers.value[conversationId] ?? [],
+      )
+
+      return {
+        id: conversationId,
+        title: group.name,
+        kind: 'group',
+        groupId: group.id,
+        lastMessageAt: latestMessage?.createdAt ?? group.updatedAt,
+        onlineCount: onlineCount || group.onlineMemberCount,
+      } satisfies ConversationSummary
+    })
+
+    return [...directConversations, ...groupConversations].sort((left, right) =>
+      compareDatesDesc(left.lastMessageAt, right.lastMessageAt),
+    )
   })
 
-  const transportHint = computed(() => {
-    if (transportMode.value === 'turn-only') {
-      return '当前先走 relay-only 策略；如果发现对端但 relay 建链失败，会自动回退到 TURN + STUN 混合候选。'
-    }
-
-    if (transportMode.value === 'hybrid') {
-      return '当前提供 TURN + STUN 候选，最终路径由浏览器 ICE 协商决定，并不保证一定走 TURN。'
-    }
-
-    return '当前仅提供 STUN 候选，严格 NAT / 企业网络下可能无法建立连接。'
-  })
-
-  const sortedRooms = computed(() =>
-    [...rooms.value].sort((left, right) => {
-      const leftAnchor = left.lastMessageAt ?? left.lastOpenedAt
-      const rightAnchor = right.lastMessageAt ?? right.lastOpenedAt
-      return rightAnchor.localeCompare(leftAnchor)
-    }),
-  )
-
-  const currentRoom = computed(
-    () => rooms.value.find((room) => room.roomId === currentRoomId.value) ?? null,
+  const currentConversation = computed(
+    () =>
+      sortedConversations.value.find(
+        (conversation) => conversation.id === currentConversationId.value,
+      ) ?? null,
   )
 
   const currentMessages = computed(() =>
-    currentRoomId.value ? messagesByRoom.value[currentRoomId.value] ?? [] : [],
+    currentConversationId.value
+      ? messagesByConversation.value[currentConversationId.value] ?? []
+      : [],
   )
 
-  const peerProfiles = computed(() => Object.values(peerProfilesMap.value))
-  const roomPreviewMap = computed(() =>
-    rooms.value.reduce<Record<string, string>>((accumulator, room) => {
-      accumulator[room.roomId] = toRoomPreview(
-        messagesByRoom.value[room.roomId],
-        Boolean(room.secret),
-      )
-      return accumulator
-    }, {}),
-  )
-
-  function clearFallbackTimer() {
-    if (fallbackTimer !== null) {
-      window.clearTimeout(fallbackTimer)
-      fallbackTimer = null
+  const peerProfiles = computed<PeerProfile[]>(() => {
+    if (!currentConversationId.value) {
+      return []
     }
-  }
 
-  function clearRoomError() {
-    roomErrorMessage.value = ''
-  }
+    return (conversationPeers.value[currentConversationId.value] ?? []).map((peer) => ({
+      peerId: peer.connectionId,
+      address: peer.address,
+      label: shortAddress(peer.address),
+      sessionId: peer.sessionId,
+      sessionPublicKey: peer.sessionPublicKey,
+      joinedAt: peer.connectedAt,
+      verifiedAt: peer.connectedAt,
+    }))
+  })
 
-  function clearWalletError() {
-    walletErrorMessage.value = ''
-  }
+  const transportLabel = computed(() =>
+    hasTurnServer(iceServers.value)
+      ? '后端信令 + P2P（STUN / TURN）'
+      : '后端信令 + P2P（STUN）',
+  )
 
-  function persist() {
+  const canSendCurrentConversation = computed(() =>
+    getReadyRuntimes(currentConversationId.value).length > 0,
+  )
+
+  function persistState() {
     savePersistedState({
       identity: null,
-      rooms: rooms.value,
-      messagesByRoom: messagesByRoom.value,
-      currentRoomId: currentRoomId.value,
+      authToken: authToken.value,
+      authExpiresAt: authExpiresAt.value,
+      currentConversationId: currentConversationId.value,
+      messagesByConversation: messagesByConversation.value,
     })
-    saveSessionIdentity(identity.value)
   }
 
-  function getRoomContext(room: KnownRoom): HandshakeRoomContext {
-    return {
-      version: 1,
-      appId: appConfig.appId,
-      roomId: room.roomId,
-      roomKind: room.kind,
-      peerLimit: room.peerLimit,
-      expiresAt: room.expiresAt,
-    }
-  }
+  function syncConnectionState() {
+    const conversationId = currentConversationId.value
 
-  function buildHandshakePayload(
-    room: KnownRoom,
-    signerAddress: `0x${string}`,
-    signerSessionId: string,
-    audienceAddress: `0x${string}`,
-    audienceSessionId: string,
-    signerChallenge: string,
-    audienceChallenge: string,
-  ) {
-    return {
-      type: 'peer-handshake',
-      appId: appConfig.appId,
-      roomId: room.roomId,
-      roomKind: room.kind,
-      peerLimit: room.peerLimit,
-      expiresAt: room.expiresAt,
-      signerAddress,
-      signerSessionId,
-      audienceAddress,
-      audienceSessionId,
-      signerChallenge,
-      audienceChallenge,
-    } satisfies HandshakeSignaturePayload
-  }
-
-  function upsertRoom(payload: InvitePayload) {
-    const existing = rooms.value.find((room) => room.roomId === payload.roomId)
-    const now = new Date().toISOString()
-    const inviteLink = buildInviteLink(payload)
-
-    if (existing) {
-      existing.kind = payload.kind
-      existing.title = payload.title
-      existing.secret = payload.secret
-      existing.peerLimit = payload.peerLimit
-      existing.expiresAt = payload.expiresAt
-      existing.inviteLink = inviteLink
-      existing.lastOpenedAt = now
-    } else {
-      rooms.value.push({
-        ...payload,
-        createdAt: now,
-        createdBy: identity.value?.address ?? 'local',
-        inviteLink,
-        lastOpenedAt: now,
-      })
-    }
-
-    persist()
-    return rooms.value.find((room) => room.roomId === payload.roomId) ?? null
-  }
-
-  function touchRoom(roomId: string) {
-    const room = rooms.value.find((item) => item.roomId === roomId)
-
-    if (!room) {
+    if (!identity.value || !conversationId) {
+      connectionState.value = 'idle'
       return
     }
 
-    room.lastOpenedAt = new Date().toISOString()
-    persist()
-  }
-
-  function appendMessage(roomId: string, message: ChatMessage) {
-    const nextMessages = [...(messagesByRoom.value[roomId] ?? [])]
-    const existingIndex = nextMessages.findIndex((entry) => entry.id === message.id)
-
-    if (existingIndex >= 0) {
-      nextMessages[existingIndex] = {
-        ...nextMessages[existingIndex],
-        ...message,
-      }
-    } else {
-      nextMessages.push(message)
-    }
-    messagesByRoom.value = {
-      ...messagesByRoom.value,
-      [roomId]: nextMessages.slice(-appConfig.roomHistoryLimit),
-    }
-
-    const room = rooms.value.find((item) => item.roomId === roomId)
-    if (room) {
-      room.lastMessageAt = message.createdAt
-      room.lastOpenedAt = message.createdAt
-    }
-
-    persist()
-  }
-
-  function updateMessageStatus(
-    roomId: string,
-    messageId: string,
-    status: 'sending' | 'sent' | 'delivered' | 'failed',
-  ) {
-    const roomMessages = messagesByRoom.value[roomId]
-
-    if (!roomMessages) {
+    if (getReadyRuntimes(conversationId).length > 0) {
+      connectionState.value = 'ready'
       return
     }
 
-    const statusPriority = {
-      failed: 0,
-      sending: 1,
-      sent: 2,
-      delivered: 3,
-    } satisfies Record<'sending' | 'sent' | 'delivered' | 'failed', number>
-
-    const nextMessages = roomMessages.map((message) => {
-      if (message.id !== messageId) {
-        return message
-      }
-
-      const currentStatus = message.status
-      if (status === 'failed') {
-        return currentStatus === 'delivered'
-          ? message
-          : {
-              ...message,
-              status,
-            }
-      }
-
-      if (
-        currentStatus &&
-        statusPriority[currentStatus] > statusPriority[status]
-      ) {
-        return message
-      }
-
-      return {
-        ...message,
-        status,
-      }
+    const peers = conversationPeers.value[conversationId] ?? []
+    const runtimes = getConversationRuntimes(conversationId)
+    const connecting = runtimes.some((runtime) => {
+      return (
+        runtime.pc.connectionState === 'new' ||
+        runtime.pc.connectionState === 'connecting' ||
+        runtime.pc.iceConnectionState === 'checking'
+      )
     })
 
-    messagesByRoom.value = {
-      ...messagesByRoom.value,
-      [roomId]: nextMessages,
+    if (peers.length > 0 || connecting || pendingRoomSubscriptions.has(conversationId)) {
+      connectionState.value = 'joining'
+      return
     }
-    persist()
+
+    connectionState.value = roomErrorMessage.value ? 'error' : 'idle'
   }
 
-  function appendSystemMessage(roomId: string, text: string) {
-    appendMessage(roomId, {
-      id: crypto.randomUUID(),
-      roomId,
+  function getConversationRuntimes(conversationId: string | null) {
+    if (!conversationId) {
+      return []
+    }
+
+    return [...peerRuntimes.values()].filter(
+      (runtime) => runtime.conversationId === conversationId,
+    )
+  }
+
+  function getReadyRuntimes(conversationId: string | null) {
+    return getConversationRuntimes(conversationId).filter(
+      (runtime) => runtime.channel?.readyState === 'open',
+    )
+  }
+
+  function findFriendByConversationId(conversationId: string) {
+    const selfAddress = identity.value?.address ?? me.value?.address
+
+    if (!selfAddress) {
+      return null
+    }
+
+    return (
+      acceptedFriends.value.find(
+        (record) =>
+          createDirectConversationId(selfAddress, record.friend.address) ===
+          conversationId,
+      ) ?? null
+    )
+  }
+
+  function getDirectConversationIdForAddress(address: string) {
+    const selfAddress = identity.value?.address ?? me.value?.address
+
+    if (!selfAddress) {
+      return null
+    }
+
+    return createDirectConversationId(selfAddress, address)
+  }
+
+  function upsertConversationPeer(conversationId: string, peer: SignalPeerDescriptor) {
+    const peers = conversationPeers.value[conversationId] ?? []
+    conversationPeers.value = {
+      ...conversationPeers.value,
+      [conversationId]: normalizePeers(
+        [...peers.filter((item) => item.connectionId !== peer.connectionId), peer],
+        selfConnection?.connectionId,
+      ),
+    }
+    syncConnectionState()
+  }
+
+  function setConversationPeers(conversationId: string, peers: SignalPeerDescriptor[]) {
+    conversationPeers.value = {
+      ...conversationPeers.value,
+      [conversationId]: normalizePeers(peers, selfConnection?.connectionId),
+    }
+    syncConnectionState()
+  }
+
+  function removeConversationPeer(conversationId: string, connectionId: string) {
+    const nextPeers = (conversationPeers.value[conversationId] ?? []).filter(
+      (peer) => peer.connectionId !== connectionId,
+    )
+
+    if (nextPeers.length > 0) {
+      conversationPeers.value = {
+        ...conversationPeers.value,
+        [conversationId]: nextPeers,
+      }
+    } else {
+      const nextMap = { ...conversationPeers.value }
+      delete nextMap[conversationId]
+      conversationPeers.value = nextMap
+    }
+
+    syncConnectionState()
+  }
+
+  function clearConversationPeers(conversationId: string) {
+    const nextMap = { ...conversationPeers.value }
+    delete nextMap[conversationId]
+    conversationPeers.value = nextMap
+    syncConnectionState()
+  }
+
+  function replaceConversationMessages(
+    conversationId: string,
+    messages: ChatMessage[],
+  ) {
+    messagesByConversation.value = {
+      ...messagesByConversation.value,
+      [conversationId]: messages
+        .sort((left, right) => compareDatesDesc(right.createdAt, left.createdAt))
+        .slice(-appConfig.roomHistoryLimit),
+    }
+  }
+
+  function appendMessage(conversationId: string, message: ChatMessage) {
+    const existingMessages = messagesByConversation.value[conversationId] ?? []
+
+    if (existingMessages.some((existing) => existing.id === message.id)) {
+      return false
+    }
+
+    replaceConversationMessages(conversationId, [...existingMessages, message])
+    return true
+  }
+
+  function appendSystemMessage(conversationId: string, text: string) {
+    appendMessage(conversationId, {
+      id: `system:${generateUuid()}`,
+      roomId: conversationId,
       senderAddress: 'system',
       senderLabel: '系统',
       text,
@@ -499,814 +499,1064 @@ export const useChatAppStore = defineStore('chatApp', () => {
     })
   }
 
-  async function leaveActiveRoom() {
-    clearFallbackTimer()
+  function updateMessageStatus(
+    conversationId: string,
+    messageId: string,
+    status: ChatMessageStatus,
+  ) {
+    const messages = messagesByConversation.value[conversationId] ?? []
+    const targetIndex = messages.findIndex((message) => message.id === messageId)
 
-    const runtime = activeRoom.value
-
-    if (!runtime) {
-      peerProfilesMap.value = {}
-      connectionState.value = 'idle'
+    if (targetIndex === -1) {
       return
     }
 
-    activeRoom.value = null
-    peerProfilesMap.value = {}
-    connectionState.value = 'idle'
-
-    await runtime.room.leave()
-  }
-
-  function validateHandshakeContext(
-    room: KnownRoom,
-    envelope: HandshakeRoomContext,
-  ) {
-    if (
-      envelope.appId !== appConfig.appId ||
-      envelope.roomId !== room.roomId ||
-      envelope.roomKind !== room.kind ||
-      envelope.peerLimit !== room.peerLimit ||
-      envelope.expiresAt !== room.expiresAt
-    ) {
-      throw new Error('远端握手与当前房间配置不匹配。')
+    const nextMessages = [...messages]
+    nextMessages[targetIndex] = {
+      ...nextMessages[targetIndex],
+      status,
     }
 
-    if (isInviteExpired(envelope.expiresAt)) {
-      throw new Error('该房间邀请已过期。')
-    }
+    replaceConversationMessages(conversationId, nextMessages)
   }
 
-  async function validatePeerProof(
-    proof: SharedWalletIdentity,
-    address: string,
-    sessionId: string,
-  ) {
-    const isValidIdentity = await verifyWalletIdentity(
-      proof,
-      appConfig.handshakeTtlMs,
-    )
+  function clearWsPromise(error?: Error) {
+    if (error) {
+      rejectWsConnect?.(error)
+    } else {
+      resolveWsConnect?.()
+    }
 
-    if (!isValidIdentity || proof.address !== address || proof.sessionId !== sessionId) {
-      throw new Error('远端钱包签名验证失败。')
+    resolveWsConnect = null
+    rejectWsConnect = null
+    wsConnectPromise = null
+  }
+
+  function clearWsHeartbeat() {
+    if (wsPingTimer !== null) {
+      window.clearInterval(wsPingTimer)
+      wsPingTimer = null
     }
   }
 
-  function ensurePeerAllowed(
-    room: KnownRoom,
-    peerId: string,
-    proof: SharedWalletIdentity,
-  ) {
-    const duplicateSession = Object.entries(peerProfilesMap.value).find(
-      ([existingPeerId, profile]) =>
-        existingPeerId !== peerId &&
-        profile.address === proof.address &&
-        profile.sessionId === proof.sessionId,
-    )
-
-    if (duplicateSession) {
-      throw new Error('检测到重复会话，已拒绝本次连接。')
-    }
-
-    if (
-      Object.keys(peerProfilesMap.value).length >= room.peerLimit - 1 &&
-      !peerProfilesMap.value[peerId]
-    ) {
-      throw new Error(
-        room.kind === 'private'
-          ? '该私聊房间已达到人数上限。'
-          : '该群聊房间已达到人数上限。',
-      )
+  function stopDirectoryRefreshLoop() {
+    if (directoryRefreshTimer !== null) {
+      window.clearInterval(directoryRefreshTimer)
+      directoryRefreshTimer = null
     }
   }
 
-  function registerPeer(
-    peerId: string,
-    proof: SharedWalletIdentity,
-  ) {
-    peerProfilesMap.value = {
-      ...peerProfilesMap.value,
-      [peerId]: {
-        peerId,
-        address: proof.address,
-        label: getDerivedLabel(proof.address),
-        sessionId: proof.sessionId,
-        joinedAt: new Date().toISOString(),
-        verifiedAt: new Date().toISOString(),
-        proof,
-      },
-    }
-
-    connectionState.value = 'ready'
-  }
-
-  function clearSessionRoomState() {
-    rooms.value = rooms.value.map((room) => ({
-      ...room,
-      inviteLink: undefined,
-      secret: undefined,
-    }))
-    messagesByRoom.value = {}
-    currentRoomId.value = null
-    peerProfilesMap.value = {}
-  }
-
-  function findRoomConflict(payload: InvitePayload) {
-    const existing = rooms.value.find((room) => room.roomId === payload.roomId)
-
-    if (!existing) {
-      return null
-    }
-
-    if (
-      existing.kind !== payload.kind ||
-      existing.peerLimit !== payload.peerLimit ||
-      existing.secret && existing.secret !== payload.secret
-    ) {
-      return '本地已存在同 ID 但配置不同的房间，已拒绝覆盖，请重新确认邀请链接。'
-    }
-
-    return null
-  }
-
-  function shouldAutoConnectRoom(roomId: string | null) {
-    if (!roomId) {
-      return false
-    }
-
-    return Boolean(rooms.value.find((room) => room.roomId === roomId)?.secret)
-  }
-
-  async function createHandshakeResponseSignature(
-    room: KnownRoom,
-    remoteProof: SharedWalletIdentity,
-    localChallenge: string,
-    remoteChallenge: string,
-  ) {
-    if (!identity.value) {
-      throw new Error('缺少钱包签名身份。')
-    }
-
-    return signPayload(
-      buildHandshakePayload(
-        room,
-        identity.value.address,
-        identity.value.sessionId,
-        remoteProof.address,
-        remoteProof.sessionId,
-        localChallenge,
-        remoteChallenge,
-      ),
-      identity.value,
-    )
-  }
-
-  async function verifyHandshakeResponseSignature(
-    room: KnownRoom,
-    signerProof: SharedWalletIdentity,
-    audienceAddress: `0x${string}`,
-    audienceSessionId: string,
-    signerChallenge: string,
-    audienceChallenge: string,
-    signature: string,
-  ) {
-    return verifyPayloadSignature(
-      buildHandshakePayload(
-        room,
-        signerProof.address,
-        signerProof.sessionId,
-        audienceAddress,
-        audienceSessionId,
-        signerChallenge,
-        audienceChallenge,
-      ),
-      signature,
-      signerProof.sessionPublicKey,
-    )
-  }
-
-  async function performPeerHandshake(
-    room: KnownRoom,
-    peerId: string,
-    send: (data: HandshakeHello | HandshakeAck | HandshakeFinalize) => Promise<void>,
-    receive: () => Promise<HandshakePayload>,
-    isInitiator: boolean,
-  ) {
-    if (!identity.value) {
-      throw new Error('缺少钱包签名身份。')
-    }
-
-    const localProof = toSharedWalletIdentity(identity.value)
-    const baseContext = getRoomContext(room)
-
-    if (isInitiator) {
-      const localChallenge = crypto.randomUUID()
-      const hello = {
-        ...baseContext,
-        step: 'hello',
-        address: localProof.address,
-        label: getDerivedLabel(localProof.address),
-        sessionId: localProof.sessionId,
-        challenge: localChallenge,
-        proof: localProof,
-      } satisfies HandshakeHello
-
-      await send(hello)
-
-      const ackPayload = await receive()
-      if (!isHandshakeAck(ackPayload.data)) {
-        throw new Error('远端握手确认格式非法。')
-      }
-
-      validateHandshakeContext(room, ackPayload.data)
-      await validatePeerProof(
-        ackPayload.data.proof,
-        ackPayload.data.address,
-        ackPayload.data.sessionId,
-      )
-      ensurePeerAllowed(room, peerId, ackPayload.data.proof)
-
-      const ackVerified = await verifyHandshakeResponseSignature(
-        room,
-        ackPayload.data.proof,
-        localProof.address,
-        localProof.sessionId,
-        ackPayload.data.challenge,
-        localChallenge,
-        ackPayload.data.responseSignature,
-      )
-
-      if (!ackVerified) {
-        throw new Error('远端握手挑战响应校验失败。')
-      }
-
-      const finalize = {
-        ...baseContext,
-        step: 'finalize',
-        address: localProof.address,
-        sessionId: localProof.sessionId,
-        responseSignature: await createHandshakeResponseSignature(
-          room,
-          ackPayload.data.proof,
-          localChallenge,
-          ackPayload.data.challenge,
-        ),
-      } satisfies HandshakeFinalize
-
-      await send(finalize)
-      registerPeer(peerId, ackPayload.data.proof)
+  async function refreshDirectorySafely() {
+    if (refreshingDirectory || !authToken.value) {
       return
     }
 
-    const helloPayload = await receive()
-    if (!isHandshakeHello(helloPayload.data)) {
-      throw new Error('远端握手请求格式非法。')
+    refreshingDirectory = true
+
+    try {
+      await refreshDirectory()
+      await syncSubscriptions()
+    } catch {
+      // Ignore transient directory refresh failures.
+    } finally {
+      refreshingDirectory = false
     }
-
-    validateHandshakeContext(room, helloPayload.data)
-    await validatePeerProof(
-      helloPayload.data.proof,
-      helloPayload.data.address,
-      helloPayload.data.sessionId,
-    )
-    ensurePeerAllowed(room, peerId, helloPayload.data.proof)
-
-    const localChallenge = crypto.randomUUID()
-    const ack = {
-      ...baseContext,
-      step: 'ack',
-      address: localProof.address,
-      label: getDerivedLabel(localProof.address),
-      sessionId: localProof.sessionId,
-      challenge: localChallenge,
-      proof: localProof,
-      responseSignature: await createHandshakeResponseSignature(
-        room,
-        helloPayload.data.proof,
-        localChallenge,
-        helloPayload.data.challenge,
-      ),
-    } satisfies HandshakeAck
-
-    await send(ack)
-
-    const finalizePayload = await receive()
-    if (!isHandshakeFinalize(finalizePayload.data)) {
-      throw new Error('远端握手完成包格式非法。')
-    }
-
-    validateHandshakeContext(room, finalizePayload.data)
-
-    if (
-      finalizePayload.data.address !== helloPayload.data.address ||
-      finalizePayload.data.sessionId !== helloPayload.data.sessionId
-    ) {
-      throw new Error('远端最终握手会话与初始声明不一致。')
-    }
-
-    const finalizeVerified = await verifyHandshakeResponseSignature(
-      room,
-      helloPayload.data.proof,
-      localProof.address,
-      localProof.sessionId,
-      helloPayload.data.challenge,
-      localChallenge,
-      finalizePayload.data.responseSignature,
-    )
-
-    if (!finalizeVerified) {
-      throw new Error('远端最终握手响应校验失败。')
-    }
-
-    registerPeer(peerId, helloPayload.data.proof)
   }
 
-  async function reopenRoomWithMode(roomId: string, mode: TransportMode) {
-    await leaveActiveRoom()
+  function startDirectoryRefreshLoop() {
+    stopDirectoryRefreshLoop()
 
-    if (!identity.value || currentRoomId.value !== roomId) {
+    if (!authToken.value) {
       return
     }
 
-    const room = rooms.value.find((item) => item.roomId === roomId)
-    if (!room) {
-      return
-    }
-
-    await openRoomConnection(room, mode)
+    directoryRefreshTimer = window.setInterval(() => {
+      void refreshDirectorySafely()
+    }, 5_000)
   }
 
-  function scheduleTurnFallback(room: KnownRoom, attemptId: number) {
-    if (transportMode.value !== 'turn-only') {
-      return
-    }
-
-    const fallbackMode = getFallbackTransportMode()
-    clearFallbackTimer()
-    fallbackTimer = window.setTimeout(() => {
-      const runtime = activeRoom.value
-      const peerCount = runtime
-        ? Object.keys(runtime.room.getPeers()).length
-        : 0
-
-      if (
-        attemptId !== connectionAttempt ||
-        runtime?.roomId !== room.roomId ||
-        peerProfiles.value.length > 0 ||
-        peerCount === 0
-      ) {
+  function startWsHeartbeat() {
+    clearWsHeartbeat()
+    wsPingTimer = window.setInterval(() => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
         return
       }
 
-      appendSystemMessage(
-        room.roomId,
-        '检测到对端但 relay-only 建链超时，已自动切换为 TURN + STUN 混合候选。',
-      )
-      void reopenRoomWithMode(room.roomId, fallbackMode)
-    }, appConfig.turnOnlyTimeoutMs)
+      ws.send(JSON.stringify({ type: 'ping' }))
+    }, 20_000)
   }
 
-  async function openRoomConnection(room: KnownRoom, mode: TransportMode) {
-    if (!room.secret) {
-      roomErrorMessage.value = '当前设备未保存该房间口令，请重新导入邀请链接。'
-      connectionState.value = 'error'
+  function closePeerRuntime(key: string) {
+    const runtime = peerRuntimes.get(key)
+
+    if (!runtime) {
       return
     }
 
-    connectionAttempt += 1
-    const attemptId = connectionAttempt
+    runtime.channel?.close()
+    runtime.pc.close()
+    peerRuntimes.delete(key)
+    syncConnectionState()
+  }
 
-    clearRoomError()
-    connectionState.value = 'joining'
-    transportMode.value = mode
-    touchRoom(room.roomId)
+  function closeConversationRuntimes(conversationId: string) {
+    for (const runtime of getConversationRuntimes(conversationId)) {
+      closePeerRuntime(runtime.key)
+    }
+  }
 
-    const { joinRoom } = await loadTrystero()
+  function clearAllPeerRuntimes() {
+    for (const key of [...peerRuntimes.keys()]) {
+      closePeerRuntime(key)
+    }
+  }
 
-    const runtimeRoom = joinRoom(
-      {
-        appId: appConfig.appId,
-        password: room.secret,
-        rtcConfig: getRtcConfig(mode),
-        ...(appConfig.relayUrls.length ? { relayUrls: appConfig.relayUrls } : {}),
-      },
-      room.roomId,
-      {
-        handshakeTimeoutMs: 15000,
-        onJoinError: ({ error }) => {
-          if (mode === 'turn-only') {
-            appendSystemMessage(
-              room.roomId,
-              'relay-only 尝试失败，已切换为 TURN + STUN 混合候选继续建链。',
-            )
-            void reopenRoomWithMode(room.roomId, getFallbackTransportMode())
-            return
-          }
+  function resetSignalState() {
+    clearWsHeartbeat()
+    wsConnected.value = false
+    selfConnection = null
+    joinedRooms.clear()
+    pendingRoomSubscriptions.clear()
+    conversationPeers.value = {}
+    clearAllPeerRuntimes()
+    syncConnectionState()
+  }
 
-          roomErrorMessage.value = error
-          connectionState.value = 'error'
-        },
-        onPeerHandshake: async (peerId, send, receive, isInitiator) => {
-          await performPeerHandshake(room, peerId, send, receive, isInitiator)
-        },
-      },
+  function scheduleSocketReconnect() {
+    if (wsReconnectTimer !== null || !authToken.value) {
+      return
+    }
+
+    wsReconnectTimer = window.setTimeout(() => {
+      wsReconnectTimer = null
+      void ensureWebSocket()
+        .then(() => syncSubscriptions())
+        .catch(() => undefined)
+    }, 1_500)
+  }
+
+  function shutdownSocket(manual: boolean) {
+    allowSocketReconnect = !manual && Boolean(authToken.value)
+
+    if (wsReconnectTimer !== null) {
+      window.clearTimeout(wsReconnectTimer)
+      wsReconnectTimer = null
+    }
+
+    const socket = ws
+    ws = null
+
+    if (socket) {
+      socket.onopen = null
+      socket.onmessage = null
+      socket.onerror = null
+      socket.onclose = null
+
+      if (
+        socket.readyState === WebSocket.OPEN ||
+        socket.readyState === WebSocket.CONNECTING
+      ) {
+        socket.close()
+      }
+    }
+
+    clearWsPromise(manual ? new Error('信令连接已关闭。') : undefined)
+    resetSignalState()
+  }
+
+  function sendWsPayload(payload: Record<string, unknown>) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      throw new Error('信令连接尚未建立。')
+    }
+
+    ws.send(JSON.stringify(payload))
+  }
+
+  async function ensureIceServers() {
+    if (!authToken.value) {
+      iceServers.value = appConfig.fallbackIceServers
+      turnExpiresAt = 0
+      return iceServers.value
+    }
+
+    if (Date.now() < turnExpiresAt - 30_000) {
+      return iceServers.value
+    }
+
+    try {
+      const payload = await fetchTurnCredentials(authToken.value)
+      iceServers.value = payload.iceServers.length
+        ? [...payload.iceServers, ...appConfig.fallbackIceServers]
+        : appConfig.fallbackIceServers
+      turnExpiresAt = Date.now() + payload.ttlSeconds * 1_000
+    } catch {
+      iceServers.value = appConfig.fallbackIceServers
+      turnExpiresAt = Date.now() + 60_000
+    }
+
+    return iceServers.value
+  }
+
+  async function createOffer(runtime: PeerRuntime) {
+    if (runtime.pc.signalingState !== 'stable') {
+      return
+    }
+
+    try {
+      await runtime.pc.setLocalDescription()
+      const description = toSessionDescription(runtime.pc.localDescription)
+
+      if (!description) {
+        return
+      }
+
+      sendWsPayload({
+        type: 'signal.offer',
+        roomKey: runtime.conversationId,
+        targetConnectionId: runtime.peer.connectionId,
+        description,
+      })
+    } catch {
+      if (currentConversationId.value === runtime.conversationId) {
+        roomErrorMessage.value = '创建 WebRTC offer 失败，请重试当前会话。'
+      }
+    }
+  }
+
+  async function flushPendingCandidates(runtime: PeerRuntime) {
+    const candidates = [...runtime.pendingCandidates]
+    runtime.pendingCandidates = []
+
+    for (const candidate of candidates) {
+      try {
+        await runtime.pc.addIceCandidate(candidate)
+      } catch {
+        // Ignore invalid buffered candidates after renegotiation.
+      }
+    }
+  }
+
+  async function handleIncomingChat(runtime: PeerRuntime, rawData: string) {
+    let payload: unknown
+
+    try {
+      payload = JSON.parse(rawData)
+    } catch {
+      return
+    }
+
+    if (!isChatWireMessage(payload)) {
+      return
+    }
+
+    if (payload.roomId !== runtime.conversationId) {
+      return
+    }
+
+    if (payload.senderAddress.toLowerCase() !== runtime.peer.address.toLowerCase()) {
+      return
+    }
+
+    const createdAt = parseIsoDate(payload.createdAt)
+    if (!createdAt) {
+      return
+    }
+
+    if (Math.abs(Date.now() - createdAt.getTime()) > appConfig.messageFreshnessMs) {
+      return
+    }
+
+    const verified = await verifyMessageAuthTag(
+      payload,
+      runtime.peer.sessionPublicKey,
     )
 
-    const [sendChat, receiveChat] =
-      runtimeRoom.makeAction<ChatWireMessage>('chat-message')
-    const [sendReceipt, receiveReceipt] =
-      runtimeRoom.makeAction<ChatReceiptWire>('chat-receipt')
+    if (!verified) {
+      return
+    }
 
-    receiveChat((payload, peerId) => {
-      void (async () => {
-        if (!isChatWireMessage(payload)) {
+    appendMessage(runtime.conversationId, {
+      id: payload.id,
+      roomId: payload.roomId,
+      senderAddress: payload.senderAddress,
+      senderLabel: payload.senderLabel || shortAddress(payload.senderAddress),
+      text: payload.text,
+      createdAt: payload.createdAt,
+      direction: 'inbound',
+      peerId: runtime.peer.connectionId,
+    })
+  }
+
+  function attachDataChannel(runtime: PeerRuntime, channel: RTCDataChannel) {
+    runtime.channel = channel
+
+    channel.onopen = () => {
+      if (currentConversationId.value === runtime.conversationId) {
+        roomErrorMessage.value = ''
+      }
+
+      syncConnectionState()
+    }
+
+    channel.onclose = () => {
+      if (runtime.channel === channel) {
+        runtime.channel = null
+      }
+
+      syncConnectionState()
+    }
+
+    channel.onerror = () => {
+      if (currentConversationId.value === runtime.conversationId) {
+        roomErrorMessage.value = 'P2P 数据通道异常，请重试当前会话。'
+      }
+
+      syncConnectionState()
+    }
+
+    channel.onmessage = (event) => {
+      const rawData = parseDataMessage(event.data)
+
+      if (!rawData) {
+        return
+      }
+
+      void handleIncomingChat(runtime, rawData)
+    }
+  }
+
+  async function ensurePeerRuntime(
+    conversationId: string,
+    peer: SignalPeerDescriptor,
+  ) {
+    const runtimeKey = `${conversationId}:${peer.connectionId}`
+    const existingRuntime = peerRuntimes.get(runtimeKey)
+
+    if (existingRuntime) {
+      existingRuntime.peer = peer
+      return existingRuntime
+    }
+
+    const currentIceServers = await ensureIceServers()
+    const pc = new RTCPeerConnection(buildRtcConfig(currentIceServers))
+    const runtime: PeerRuntime = {
+      key: runtimeKey,
+      conversationId,
+      peer,
+      pc,
+      channel: null,
+      isInitiator: Boolean(
+        selfConnection && selfConnection.connectionId > peer.connectionId,
+      ),
+      pendingCandidates: [],
+    }
+
+    pc.onicecandidate = ({ candidate }) => {
+      if (!candidate) {
+        return
+      }
+
+      try {
+        sendWsPayload({
+          type: 'signal.candidate',
+          roomKey: conversationId,
+          targetConnectionId: peer.connectionId,
+          candidate: candidate.toJSON(),
+        })
+      } catch {
+        // Ignore transient socket failures; reconnect will retry signaling.
+      }
+    }
+
+    pc.ondatachannel = (event) => {
+      attachDataChannel(runtime, event.channel)
+    }
+
+    pc.onnegotiationneeded = () => {
+      if (!runtime.isInitiator) {
+        return
+      }
+
+      void createOffer(runtime)
+    }
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed') {
+        if (currentConversationId.value === conversationId) {
+          roomErrorMessage.value = 'P2P 连接失败，请点击重连。'
+        }
+
+        closePeerRuntime(runtime.key)
+        return
+      }
+
+      syncConnectionState()
+    }
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'failed' && currentConversationId.value === conversationId) {
+        roomErrorMessage.value = 'ICE 协商失败，请检查后端 TURN / STUN。'
+      }
+
+      syncConnectionState()
+    }
+
+    peerRuntimes.set(runtimeKey, runtime)
+
+    if (runtime.isInitiator) {
+      attachDataChannel(runtime, pc.createDataChannel('chat'))
+    }
+
+    syncConnectionState()
+    return runtime
+  }
+
+  function buildPeerPresenceText(
+    conversationId: string,
+    peer: SignalPeerDescriptor,
+    action: 'joined' | 'left',
+  ) {
+    const conversation = sortedConversations.value.find(
+      (item) => item.id === conversationId,
+    )
+
+    if (conversation?.kind === 'group') {
+      return `${shortAddress(peer.address)} ${action === 'joined' ? '已上线' : '已离线'}`
+    }
+
+    return action === 'joined' ? '对方已上线，可以开始聊天。' : '对方已离线。'
+  }
+
+  async function handleRoomSubscribed(payload: RoomSubscribedPayload) {
+    pendingRoomSubscriptions.delete(payload.roomKey)
+    joinedRooms.add(payload.roomKey)
+    setConversationPeers(payload.roomKey, payload.peers)
+
+    for (const peer of payload.peers) {
+      await ensurePeerRuntime(payload.roomKey, peer)
+    }
+  }
+
+  async function handlePeerJoined(payload: PeerJoinedPayload) {
+    upsertConversationPeer(payload.roomKey, payload.peer)
+    appendSystemMessage(
+      payload.roomKey,
+      buildPeerPresenceText(payload.roomKey, payload.peer, 'joined'),
+    )
+    await ensurePeerRuntime(payload.roomKey, payload.peer)
+  }
+
+  function handlePeerLeft(payload: PeerLeftPayload) {
+    removeConversationPeer(payload.roomKey, payload.peer.connectionId)
+    appendSystemMessage(
+      payload.roomKey,
+      buildPeerPresenceText(payload.roomKey, payload.peer, 'left'),
+    )
+    closePeerRuntime(`${payload.roomKey}:${payload.peer.connectionId}`)
+  }
+
+  async function handleSignalOffer(payload: SignalPayload) {
+    if (!payload.description || !payload.from) {
+      return
+    }
+
+    const runtime = await ensurePeerRuntime(payload.roomKey, payload.from)
+
+    try {
+      await runtime.pc.setRemoteDescription(payload.description)
+      await flushPendingCandidates(runtime)
+      await runtime.pc.setLocalDescription(await runtime.pc.createAnswer())
+      const description = toSessionDescription(runtime.pc.localDescription)
+
+      if (!description) {
+        return
+      }
+
+      sendWsPayload({
+        type: 'signal.answer',
+        roomKey: payload.roomKey,
+        targetConnectionId: payload.from.connectionId,
+        description,
+      })
+    } catch {
+      if (currentConversationId.value === payload.roomKey) {
+        roomErrorMessage.value = '处理远端 offer 失败，请点击重连。'
+      }
+    }
+  }
+
+  async function handleSignalAnswer(payload: SignalPayload) {
+    if (!payload.description || !payload.from) {
+      return
+    }
+
+    const runtime = await ensurePeerRuntime(payload.roomKey, payload.from)
+
+    try {
+      await runtime.pc.setRemoteDescription(payload.description)
+      await flushPendingCandidates(runtime)
+    } catch {
+      if (currentConversationId.value === payload.roomKey) {
+        roomErrorMessage.value = '处理远端 answer 失败，请点击重连。'
+      }
+    }
+  }
+
+  async function handleSignalCandidate(payload: SignalPayload) {
+    if (!payload.candidate || !payload.from) {
+      return
+    }
+
+    const runtime = await ensurePeerRuntime(payload.roomKey, payload.from)
+
+    if (!runtime.pc.remoteDescription) {
+      runtime.pendingCandidates.push(payload.candidate)
+      return
+    }
+
+    try {
+      await runtime.pc.addIceCandidate(payload.candidate)
+    } catch {
+      // Ignore invalid late ICE candidates.
+    }
+  }
+
+  async function handleWsMessage(rawData: string) {
+    let payload: unknown
+
+    try {
+      payload = JSON.parse(rawData)
+    } catch {
+      return
+    }
+
+    if (!isRecord(payload) || typeof payload.type !== 'string') {
+      return
+    }
+
+    switch (payload.type) {
+      case 'session.ready': {
+        if (!isSignalPeerDescriptor(payload.self)) {
           return
         }
 
-        const verifiedPeer = peerProfilesMap.value[peerId]
+        selfConnection = payload.self
+        wsConnected.value = true
+        clearWsPromise()
+        startWsHeartbeat()
+        await syncSubscriptions()
+        syncConnectionState()
+        return
+      }
+
+      case 'room.subscribed': {
         if (
-          !verifiedPeer ||
-          payload.senderAddress !== verifiedPeer.address ||
-          payload.sessionId !== verifiedPeer.sessionId
+          typeof payload.roomKey !== 'string' ||
+          !Array.isArray(payload.peers) ||
+          (payload.roomType !== 'direct' && payload.roomType !== 'group')
         ) {
           return
         }
 
-        const createdAt = parseIsoDate(payload.createdAt)
-        if (!createdAt) {
-          return
-        }
-
-        const payloadAge = Math.abs(Date.now() - createdAt.getTime())
-        if (payloadAge > appConfig.messageFreshnessMs) {
-          return
-        }
-
-        const isValidAuthTag = await verifyMessageAuthTag(
-          payload,
-          verifiedPeer.proof.sessionPublicKey,
-        )
-        if (!isValidAuthTag) {
-          return
-        }
-
-        const text = clampText(payload.text, appConfig.maxMessageLength)
-        if (!text) {
-          return
-        }
-
-        appendMessage(room.roomId, {
-          id: payload.id,
-          roomId: room.roomId,
-          senderAddress: payload.senderAddress,
-          senderLabel: verifiedPeer.label,
-          text,
-          createdAt: payload.createdAt,
-          direction: 'inbound',
-          peerId,
+        await handleRoomSubscribed({
+          type: 'room.subscribed',
+          roomKey: payload.roomKey,
+          roomType: payload.roomType,
+          peers: payload.peers.filter(isSignalPeerDescriptor),
         })
+        return
+      }
 
-        const activeIdentity = identity.value
-        if (!activeIdentity) {
+      case 'peer.joined': {
+        if (typeof payload.roomKey !== 'string' || !isSignalPeerDescriptor(payload.peer)) {
           return
         }
 
-        const receipt = {
-          roomId: room.roomId,
-          messageId: payload.id,
-          senderSessionId: payload.sessionId,
-          recipientSessionId: activeIdentity.sessionId,
-          receivedAt: new Date().toISOString(),
-        } satisfies ChatReceiptWire
+        await handlePeerJoined({
+          type: 'peer.joined',
+          roomKey: payload.roomKey,
+          peer: payload.peer,
+        })
+        return
+      }
 
-        try {
-          await sendReceipt(receipt, peerId)
-        } catch {
-          // Best-effort delivery signal only.
+      case 'peer.left': {
+        if (typeof payload.roomKey !== 'string' || !isSignalPeerDescriptor(payload.peer)) {
+          return
         }
-      })()
-    })
 
-    receiveReceipt((payload, peerId) => {
-      if (!isChatReceiptWire(payload) || payload.roomId !== room.roomId) {
+        handlePeerLeft({
+          type: 'peer.left',
+          roomKey: payload.roomKey,
+          peer: payload.peer,
+        })
         return
       }
 
-      const activeIdentity = identity.value
-      const verifiedPeer = peerProfilesMap.value[peerId]
+      case 'signal.offer':
+      case 'signal.answer':
+      case 'signal.candidate': {
+        if (typeof payload.roomKey !== 'string' || !isSignalPeerDescriptor(payload.from)) {
+          return
+        }
 
-      if (!activeIdentity || !verifiedPeer) {
+        const signalPayload = {
+          roomKey: payload.roomKey,
+          from: payload.from,
+          description: payload.description as RTCSessionDescriptionInit | undefined,
+          candidate: payload.candidate as RTCIceCandidateInit | undefined,
+        } satisfies SignalPayload
+
+        if (payload.type === 'signal.offer') {
+          await handleSignalOffer(signalPayload)
+          return
+        }
+
+        if (payload.type === 'signal.answer') {
+          await handleSignalAnswer(signalPayload)
+          return
+        }
+
+        await handleSignalCandidate(signalPayload)
         return
       }
 
-      if (
-        payload.senderSessionId !== activeIdentity.sessionId ||
-        payload.recipientSessionId !== verifiedPeer.sessionId ||
-        !parseIsoDate(payload.receivedAt)
-      ) {
+      case 'error': {
+        if (typeof payload.message === 'string') {
+          roomErrorMessage.value = payload.message
+        }
+
+        if (typeof payload.requestId === 'string') {
+          pendingRoomSubscriptions.delete(payload.requestId)
+        }
+
+        syncConnectionState()
         return
       }
 
-      updateMessageStatus(room.roomId, payload.messageId, 'delivered')
-    })
-
-    runtimeRoom.onPeerJoin((peerId) => {
-      clearFallbackTimer()
-      const profile = peerProfilesMap.value[peerId]
-
-      const modeLabel =
-        transportMode.value === 'turn-only'
-          ? 'relay-only'
-          : transportMode.value === 'hybrid'
-            ? 'TURN + STUN 混合候选'
-            : '仅 STUN'
-
-      appendSystemMessage(
-        room.roomId,
-        `${profile?.label ?? '新成员'} 已加入，当前 ICE 策略：${modeLabel}。`,
-      )
-    })
-
-    runtimeRoom.onPeerLeave((peerId) => {
-      const profile = peerProfilesMap.value[peerId]
-
-      if (profile) {
-        appendSystemMessage(room.roomId, `${profile.label} 已离开。`)
-      }
-
-      const nextPeers = { ...peerProfilesMap.value }
-      delete nextPeers[peerId]
-      peerProfilesMap.value = nextPeers
-      connectionState.value = Object.keys(nextPeers).length ? 'ready' : 'idle'
-    })
-
-    activeRoom.value = {
-      roomId: room.roomId,
-      room: markRaw(runtimeRoom),
-      sendChat: markRaw(sendChat),
-      transportMode: mode,
+      default:
+        return
     }
-
-    connectionState.value = Object.keys(peerProfilesMap.value).length ? 'ready' : 'idle'
-    scheduleTurnFallback(room, attemptId)
   }
 
-  async function ensureRoomConnection(roomId = currentRoomId.value) {
-    if (!roomId || !identity.value) {
+  async function ensureWebSocket() {
+    if (!authToken.value) {
       return
     }
 
-    if (activeRoom.value?.roomId === roomId) {
+    if (ws && ws.readyState === WebSocket.OPEN && wsConnected.value) {
       return
     }
 
-    const room = rooms.value.find((item) => item.roomId === roomId)
-    if (!room) {
+    if (wsConnectPromise) {
+      return wsConnectPromise
+    }
+
+    const token = authToken.value
+    allowSocketReconnect = true
+    wsConnectPromise = new Promise<void>((resolve, reject) => {
+      resolveWsConnect = resolve
+      rejectWsConnect = reject
+    })
+
+    const socket = new WebSocket(buildBackendWsUrl(token))
+    ws = socket
+
+    socket.onopen = () => {
+      // Wait for session.ready before resolving.
+    }
+
+    socket.onmessage = (event) => {
+      if (typeof event.data !== 'string') {
+        return
+      }
+
+      void handleWsMessage(event.data)
+    }
+
+    socket.onerror = () => {
+      if (!wsConnected.value) {
+        clearWsPromise(new Error('信令连接失败。'))
+      }
+    }
+
+    socket.onclose = () => {
+      const wasConnected = wsConnected.value
+
+      if (ws === socket) {
+        ws = null
+      }
+
+      if (!wasConnected) {
+        clearWsPromise(new Error('信令连接已关闭。'))
+      }
+
+      resetSignalState()
+
+      if (allowSocketReconnect && authToken.value) {
+        scheduleSocketReconnect()
+      }
+    }
+
+    return wsConnectPromise
+  }
+
+  function buildRoomSubscription(conversationId: string) {
+    if (conversationId.startsWith('group:')) {
+      return {
+        type: 'room.subscribe',
+        requestId: conversationId,
+        roomType: 'group',
+        groupId: conversationId.slice('group:'.length),
+      } as const
+    }
+
+    const friend = findFriendByConversationId(conversationId)
+    if (!friend) {
+      return null
+    }
+
+    return {
+      type: 'room.subscribe',
+      requestId: conversationId,
+      roomType: 'direct',
+      peerAddress: friend.friend.address,
+    } as const
+  }
+
+  function subscribeConversation(conversationId: string) {
+    if (!wsConnected.value) {
       return
     }
 
-    if (!room.secret) {
-      roomErrorMessage.value = '当前设备未保存该房间口令，请重新导入邀请链接。'
-      connectionState.value = 'error'
+    if (joinedRooms.has(conversationId) || pendingRoomSubscriptions.has(conversationId)) {
       return
     }
 
-    if (isInviteExpired(room.expiresAt)) {
-      roomErrorMessage.value = `该邀请已于 ${formatDateTime(room.expiresAt)} 过期，请创建新的房间。`
-      connectionState.value = 'error'
+    const payload = buildRoomSubscription(conversationId)
+    if (!payload) {
       return
     }
 
-    await leaveActiveRoom()
-    await openRoomConnection(room, getPreferredTransportMode())
+    pendingRoomSubscriptions.add(conversationId)
+
+    try {
+      sendWsPayload(payload)
+    } catch {
+      pendingRoomSubscriptions.delete(conversationId)
+    }
+
+    syncConnectionState()
+  }
+
+  async function syncSubscriptions() {
+    if (!wsConnected.value) {
+      return
+    }
+
+    const desiredRoomIds = new Set(sortedConversations.value.map((item) => item.id))
+
+    for (const joinedRoomId of [...joinedRooms]) {
+      if (desiredRoomIds.has(joinedRoomId)) {
+        continue
+      }
+
+      try {
+        sendWsPayload({
+          type: 'room.leave',
+          roomKey: joinedRoomId,
+        })
+      } catch {
+        // Ignore leave failures during refresh.
+      }
+
+      joinedRooms.delete(joinedRoomId)
+      pendingRoomSubscriptions.delete(joinedRoomId)
+      closeConversationRuntimes(joinedRoomId)
+      clearConversationPeers(joinedRoomId)
+    }
+
+    for (const pendingRoomId of [...pendingRoomSubscriptions]) {
+      if (!desiredRoomIds.has(pendingRoomId)) {
+        pendingRoomSubscriptions.delete(pendingRoomId)
+      }
+    }
+
+    for (const conversation of sortedConversations.value) {
+      subscribeConversation(conversation.id)
+    }
+  }
+
+  function ensureConversationSelection() {
+    const availableConversationIds = new Set(
+      sortedConversations.value.map((conversation) => conversation.id),
+    )
+
+    if (
+      currentConversationId.value &&
+      availableConversationIds.has(currentConversationId.value)
+    ) {
+      return
+    }
+
+    currentConversationId.value = sortedConversations.value[0]?.id ?? null
+  }
+
+  async function refreshDirectory() {
+    if (!authToken.value) {
+      return
+    }
+
+    const [mePayload, friendsPayload, groupsPayload] = await Promise.all([
+      fetchMe(authToken.value),
+      fetchFriends(authToken.value),
+      fetchGroups(authToken.value),
+    ])
+
+    me.value = mePayload.user
+    acceptedFriends.value = friendsPayload.friends
+    pendingInbound.value = friendsPayload.pendingInbound
+    pendingOutbound.value = friendsPayload.pendingOutbound
+    groups.value = groupsPayload.groups
+    ensureConversationSelection()
+  }
+
+  async function bootstrapAuthenticatedState() {
+    if (!authToken.value) {
+      return
+    }
+
+    await Promise.all([refreshDirectory(), ensureIceServers()])
+    await ensureWebSocket()
+    await syncSubscriptions()
+    startDirectoryRefreshLoop()
+    syncConnectionState()
+  }
+
+  async function connectWithIdentity(nextIdentity: WalletIdentity) {
+    const previousToken = authToken.value
+    const nextSession = await createBackendSession(nextIdentity)
+
+    if (previousToken && previousToken !== nextSession.token) {
+      try {
+        await revokeBackendSession(previousToken)
+      } catch {
+        // Ignore failures when replacing an existing session.
+      }
+    }
+
+    shutdownSocket(true)
+    stopDirectoryRefreshLoop()
+
+    identity.value = nextIdentity
+    authToken.value = nextSession.token
+    authExpiresAt.value = nextSession.expiresAt
+    me.value = nextSession.user
+    acceptedFriends.value = []
+    pendingInbound.value = []
+    pendingOutbound.value = []
+    groups.value = []
+    walletErrorMessage.value = ''
+    roomErrorMessage.value = ''
+
+    try {
+      await bootstrapAuthenticatedState()
+    } catch (error) {
+      identity.value = null
+      authToken.value = null
+      authExpiresAt.value = null
+      me.value = null
+      acceptedFriends.value = []
+      pendingInbound.value = []
+      pendingOutbound.value = []
+      groups.value = []
+      currentConversationId.value = null
+      iceServers.value = appConfig.fallbackIceServers
+      turnExpiresAt = 0
+      stopDirectoryRefreshLoop()
+      clearPersistedSession()
+      saveSessionIdentity(null)
+      throw error
+    }
   }
 
   async function initialize() {
-    if (initialized.value) {
+    walletErrorMessage.value = ''
+    roomErrorMessage.value = ''
+
+    if (!identity.value || !authToken.value) {
+      authToken.value = null
+      authExpiresAt.value = null
+      stopDirectoryRefreshLoop()
+      syncConnectionState()
       return
     }
 
-    initialized.value = true
-
-    if (
-      identity.value &&
-      !(await verifyWalletIdentity(identity.value, appConfig.handshakeTtlMs))
-    ) {
-      identity.value = null
-      walletErrorMessage.value = '本地会话签名已失效，请重新连接钱包。'
+    const expiresAt = parseIsoDate(authExpiresAt.value ?? '')
+    if (expiresAt && expiresAt.getTime() <= Date.now()) {
+      await disconnectWallet()
+      return
     }
 
-    const invite = consumeInviteFromLocation()
-    if (invite) {
-      const inviteConflict = findRoomConflict(invite)
-
-      if (isInviteExpired(invite.expiresAt)) {
-        roomErrorMessage.value = '地址栏中的邀请已过期，已拒绝导入。'
-      } else if (inviteConflict) {
-        roomErrorMessage.value = inviteConflict
-      } else {
-        upsertRoom(invite)
-        currentRoomId.value = invite.roomId
-        appendSystemMessage(
-          invite.roomId,
-          '检测到地址栏邀请，已导入到本地，并自动从 URL 中清除了房间口令。',
-        )
-      }
-    }
-
-    persist()
-
-    const startupRoomId = shouldAutoConnectRoom(currentRoomId.value)
-      ? currentRoomId.value
-      : null
-
-    if (identity.value && startupRoomId) {
-      await ensureRoomConnection(startupRoomId)
+    try {
+      await bootstrapAuthenticatedState()
+    } catch (error) {
+      roomErrorMessage.value = stringifyError(error, '初始化聊天状态失败。')
+      await disconnectWallet()
     }
   }
 
   async function connectWallet() {
     walletBusy.value = true
-    clearWalletError()
-    clearRoomError()
+    walletErrorMessage.value = ''
 
     try {
-      identity.value = await connectWalletIdentity()
-      persist()
-
-      if (shouldAutoConnectRoom(currentRoomId.value)) {
-        await ensureRoomConnection(currentRoomId.value)
-      }
+      await connectWithIdentity(await connectWalletIdentity())
     } catch (error) {
-      walletErrorMessage.value =
-        error instanceof Error ? error.message : '钱包连接失败。'
+      walletErrorMessage.value = stringifyError(error, '连接钱包失败。')
+    } finally {
+      walletBusy.value = false
+    }
+  }
+
+  async function connectTestIdentity() {
+    walletBusy.value = true
+    walletErrorMessage.value = ''
+
+    try {
+      await connectWithIdentity(await createTestIdentity())
+    } catch (error) {
+      walletErrorMessage.value = stringifyError(error, '启用测试身份失败。')
     } finally {
       walletBusy.value = false
     }
   }
 
   async function disconnectWallet() {
-    await leaveActiveRoom()
-    clearSessionRoomState()
+    const token = authToken.value
+
+    shutdownSocket(true)
+    stopDirectoryRefreshLoop()
+
+    if (token) {
+      try {
+        await revokeBackendSession(token)
+      } catch {
+        // Ignore backend revoke failures on logout.
+      }
+    }
+
     identity.value = null
-    clearWalletError()
-    clearRoomError()
-    persist()
+    authToken.value = null
+    authExpiresAt.value = null
+    me.value = null
+    acceptedFriends.value = []
+    pendingInbound.value = []
+    pendingOutbound.value = []
+    groups.value = []
+    currentConversationId.value = null
+    iceServers.value = appConfig.fallbackIceServers
+    turnExpiresAt = 0
+    walletErrorMessage.value = ''
+    roomErrorMessage.value = ''
+    clearPersistedSession()
+    saveSessionIdentity(null)
+    syncConnectionState()
   }
 
-  async function createRoom(kind: RoomKind, title: string) {
-    clearRoomError()
+  async function selectConversation(conversationId: string) {
+    currentConversationId.value = conversationId
+    roomErrorMessage.value = ''
+    subscribeConversation(conversationId)
 
-    const payload = {
-      roomId: generateRoomId(),
-      kind,
-      title: sanitizeRoomTitle(title, kind),
-      secret: generateRoomSecret(),
-      peerLimit: kind === 'private' ? 2 : 8,
-      expiresAt: new Date(Date.now() + appConfig.inviteTtlMs).toISOString(),
-    } satisfies InvitePayload
-
-    const room = upsertRoom(payload)
-    if (!room) {
-      return null
+    for (const peer of conversationPeers.value[conversationId] ?? []) {
+      await ensurePeerRuntime(conversationId, peer)
     }
 
-    currentRoomId.value = room.roomId
-    appendSystemMessage(
-      room.roomId,
-      `房间已创建，有效期至 ${formatDateTime(room.expiresAt)}。请尽快发送邀请。`,
-    )
-    persist()
-
-    if (identity.value) {
-      await ensureRoomConnection(room.roomId)
-    }
-
-    return room
+    syncConnectionState()
   }
 
-  async function importInvite(raw: string) {
-    clearRoomError()
+  async function reconnectCurrentConversation() {
+    const conversationId = currentConversationId.value
 
-    const payload = parseInvitePayload(raw)
-
-    if (!payload) {
-      roomErrorMessage.value = '邀请链接格式无效。'
-      return null
-    }
-
-    if (isInviteExpired(payload.expiresAt)) {
-      roomErrorMessage.value = '邀请链接已过期。'
-      return null
-    }
-
-    const conflictError = findRoomConflict(payload)
-    if (conflictError) {
-      roomErrorMessage.value = conflictError
-      return null
-    }
-
-    const room = upsertRoom(payload)
-    if (!room) {
-      return null
-    }
-
-    currentRoomId.value = room.roomId
-    appendSystemMessage(
-      room.roomId,
-      `邀请已导入，有效期至 ${formatDateTime(room.expiresAt)}。`,
-    )
-    persist()
-
-    if (identity.value && shouldAutoConnectRoom(room.roomId)) {
-      await ensureRoomConnection(room.roomId)
-    }
-
-    return room
-  }
-
-  async function selectRoom(roomId: string) {
-    clearRoomError()
-    currentRoomId.value = roomId
-    touchRoom(roomId)
-    persist()
-
-    if (identity.value) {
-      await ensureRoomConnection(roomId)
-    }
-  }
-
-  async function reconnectCurrentRoom() {
-    const roomId = currentRoomId.value
-    if (!roomId) {
+    if (!conversationId) {
       return
     }
 
-    clearRoomError()
-    await leaveActiveRoom()
-    if (identity.value) {
-      await ensureRoomConnection(roomId)
+    roomErrorMessage.value = ''
+
+    if (joinedRooms.has(conversationId)) {
+      try {
+        sendWsPayload({
+          type: 'room.leave',
+          roomKey: conversationId,
+        })
+      } catch {
+        // Ignore explicit leave failures during reconnect.
+      }
     }
+
+    joinedRooms.delete(conversationId)
+    pendingRoomSubscriptions.delete(conversationId)
+    closeConversationRuntimes(conversationId)
+    clearConversationPeers(conversationId)
+
+    if (!wsConnected.value) {
+      await ensureWebSocket()
+    }
+
+    subscribeConversation(conversationId)
   }
 
-  async function sendMessage(rawText: string) {
-    const room = currentRoom.value
-    const activeIdentity = identity.value
-    const runtime = activeRoom.value
-
-    if (!room || !activeIdentity) {
+  async function sendMessage(text: string) {
+    if (!identity.value) {
+      roomErrorMessage.value = '请先连接身份。'
       return false
     }
 
-    if (!room.secret) {
-      roomErrorMessage.value = '当前设备未保存该房间口令，请重新导入邀请链接。'
+    if (!currentConversation.value) {
+      roomErrorMessage.value = '请先选择一个会话。'
       return false
     }
 
-    if (isInviteExpired(room.expiresAt)) {
-      roomErrorMessage.value = '当前房间邀请已过期，无法继续发送消息。'
+    const normalizedText = clampText(text, appConfig.maxMessageLength).trim()
+    if (!normalizedText) {
       return false
     }
 
-    const text = clampText(rawText, appConfig.maxMessageLength)
-    if (!text) {
-      return false
-    }
-
-    if (!runtime || runtime.roomId !== room.roomId) {
-      roomErrorMessage.value = '当前房间尚未建立可用连接，请先重连。'
-      return false
-    }
-
-    if (Object.keys(peerProfilesMap.value).length === 0) {
-      roomErrorMessage.value = '当前没有可用对端，消息未发送。'
+    const readyRuntimes = getReadyRuntimes(currentConversation.value.id)
+    if (!readyRuntimes.length) {
+      roomErrorMessage.value =
+        currentConversation.value.kind === 'private'
+          ? '对方当前不在线，或 P2P 通道尚未建立。'
+          : '当前没有可用群成员在线，或 P2P 通道尚未建立。'
       return false
     }
 
     sendBusy.value = true
-    clearRoomError()
+    roomErrorMessage.value = ''
 
-    let pendingMessageId: string | null = null
+    const createdAt = new Date().toISOString()
+    const unsignedMessage = {
+      id: generateUuid(),
+      roomId: currentConversation.value.id,
+      senderAddress: identity.value.address,
+      senderLabel: shortAddress(identity.value.address),
+      sessionId: identity.value.sessionId,
+      text: normalizedText,
+      createdAt,
+    }
 
     try {
-      const unsignedMessage = {
-        id: crypto.randomUUID(),
-        roomId: room.roomId,
-        senderAddress: activeIdentity.address,
-        senderLabel: shortAddress(activeIdentity.address),
-        sessionId: activeIdentity.sessionId,
-        text,
-        createdAt: new Date().toISOString(),
-      } satisfies Omit<ChatWireMessage, 'authTag'>
-
+      const authTag = await createMessageAuthTag(unsignedMessage, identity.value)
       const wireMessage = {
         ...unsignedMessage,
-        authTag: await createMessageAuthTag(unsignedMessage, activeIdentity),
+        authTag,
       } satisfies ChatWireMessage
-      pendingMessageId = wireMessage.id
 
-      appendMessage(room.roomId, {
+      appendMessage(currentConversation.value.id, {
         id: wireMessage.id,
-        roomId: room.roomId,
+        roomId: wireMessage.roomId,
         senderAddress: wireMessage.senderAddress,
         senderLabel: wireMessage.senderLabel,
         text: wireMessage.text,
@@ -1315,47 +1565,171 @@ export const useChatAppStore = defineStore('chatApp', () => {
         status: 'sending',
       })
 
-      await runtime.sendChat(wireMessage)
-      updateMessageStatus(room.roomId, wireMessage.id, 'sent')
+      let sentCount = 0
+      const payload = JSON.stringify(wireMessage)
+
+      for (const runtime of readyRuntimes) {
+        try {
+          runtime.channel?.send(payload)
+          sentCount += 1
+        } catch {
+          // Ignore individual peer send failures and keep fan-out best effort.
+        }
+      }
+
+      updateMessageStatus(
+        currentConversation.value.id,
+        wireMessage.id,
+        sentCount > 0 ? 'sent' : 'failed',
+      )
+
+      if (!sentCount) {
+        roomErrorMessage.value = '消息发送失败，当前 P2P 通道不可用。'
+        return false
+      }
 
       return true
     } catch (error) {
-      if (pendingMessageId) {
-        updateMessageStatus(room.roomId, pendingMessageId, 'failed')
-      }
-      roomErrorMessage.value =
-        error instanceof Error ? error.message : '消息发送失败。'
+      roomErrorMessage.value = stringifyError(error, '消息发送失败。')
       return false
     } finally {
       sendBusy.value = false
     }
   }
 
-  return {
+  async function sendFriendRequest(address: string) {
+    if (!authToken.value || !identity.value) {
+      roomErrorMessage.value = '请先连接身份。'
+      return false
+    }
+
+    const normalizedAddress = address.trim()
+    if (!normalizedAddress) {
+      roomErrorMessage.value = '请输入好友地址。'
+      return false
+    }
+
+    if (normalizedAddress.toLowerCase() === identity.value.address.toLowerCase()) {
+      roomErrorMessage.value = '不能添加自己为好友。'
+      return false
+    }
+
+    try {
+      await sendFriendRequestApi(authToken.value, normalizedAddress)
+      await refreshDirectory()
+      roomErrorMessage.value = ''
+      return true
+    } catch (error) {
+      roomErrorMessage.value = stringifyError(error, '发送好友请求失败。')
+      return false
+    }
+  }
+
+  async function acceptFriendRequest(friendshipId: number) {
+    if (!authToken.value) {
+      roomErrorMessage.value = '请先连接身份。'
+      return false
+    }
+
+    const pendingRequest = pendingInbound.value.find(
+      (item) => item.id === friendshipId,
+    )
+
+    try {
+      await acceptFriendRequestApi(authToken.value, { friendshipId })
+      await refreshDirectory()
+      roomErrorMessage.value = ''
+
+      const conversationId = pendingRequest
+        ? getDirectConversationIdForAddress(pendingRequest.friend.address)
+        : null
+
+      if (conversationId) {
+        await selectConversation(conversationId)
+      }
+
+      return true
+    } catch (error) {
+      roomErrorMessage.value = stringifyError(error, '接受好友请求失败。')
+      return false
+    }
+  }
+
+  async function createGroup(name: string, memberAddresses: string[]) {
+    if (!authToken.value) {
+      roomErrorMessage.value = '请先连接身份。'
+      return false
+    }
+
+    const normalizedName = name.trim()
+    if (!normalizedName) {
+      roomErrorMessage.value = '群名称不能为空。'
+      return false
+    }
+
+    const uniqueMembers = [...new Set(memberAddresses.map((item) => item.trim()).filter(Boolean))]
+
+    try {
+      const result = await createGroupApi(authToken.value, normalizedName, uniqueMembers)
+      await refreshDirectory()
+      roomErrorMessage.value = ''
+      await selectConversation(createGroupConversationId(result.group.id))
+      return true
+    } catch (error) {
+      roomErrorMessage.value = stringifyError(error, '创建群聊失败。')
+      return false
+    }
+  }
+
+  watch(
+    [authToken, authExpiresAt, currentConversationId, messagesByConversation],
+    () => {
+      persistState()
+    },
+    { deep: true },
+  )
+
+  watch(
     identity,
-    currentRoomId,
-    currentRoom,
-    currentMessages,
-    peerProfiles,
-    roomPreviewMap,
-    sortedRooms,
-    connectionState,
-    roomErrorMessage,
-    walletErrorMessage,
-    walletBusy,
-    sendBusy,
-    identityLabel,
-    maxMessageLength: appConfig.maxMessageLength,
-    transportMode,
-    transportLabel,
-    transportHint,
-    initialize,
+    (nextIdentity) => {
+      saveSessionIdentity(nextIdentity)
+    },
+    { deep: true },
+  )
+
+  watch(currentConversationId, () => {
+    syncConnectionState()
+  })
+
+  return {
+    acceptedFriends,
+    canSendCurrentConversation,
+    connectTestIdentity,
     connectWallet,
+    connectionState,
+    createGroup,
+    currentConversation,
+    currentConversationId,
+    currentMessages,
     disconnectWallet,
-    createRoom,
-    importInvite,
-    selectRoom,
-    reconnectCurrentRoom,
+    groups,
+    identity,
+    initialize,
+    maxMessageLength,
+    peerProfiles,
+    pendingInbound,
+    pendingOutbound,
+    reconnectCurrentConversation,
+    roomErrorMessage,
+    selectConversation,
+    sendBusy,
+    sendFriendRequest,
     sendMessage,
+    sortedConversations,
+    testIdentityEnabled,
+    transportLabel,
+    walletBusy,
+    walletErrorMessage,
+    acceptFriendRequest,
   }
 })

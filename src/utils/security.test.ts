@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
   createMessageAuthTag,
   generateSessionKeyPair,
@@ -6,6 +6,7 @@ import {
 } from './security'
 
 let sessionKeys: Awaited<ReturnType<typeof generateSessionKeyPair>>
+const originalCrypto = globalThis.crypto
 
 const chatPayload = {
   id: 'message-1',
@@ -19,6 +20,13 @@ const chatPayload = {
 
 beforeAll(async () => {
   sessionKeys = await generateSessionKeyPair()
+})
+
+afterEach(() => {
+  Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    value: originalCrypto,
+  })
 })
 
 describe('security utils', () => {
@@ -66,5 +74,21 @@ describe('security utils', () => {
         otherKeys.publicKey,
       ),
     ).toBe(false)
+  })
+
+  it('generates session keys without crypto.subtle', async () => {
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: {
+        ...originalCrypto,
+        subtle: undefined,
+      },
+    })
+
+    const keys = await generateSessionKeyPair()
+
+    expect(keys.publicKey.length).toBeGreaterThan(0)
+    expect(keys.privateKey.length).toBeGreaterThan(0)
+    expect(keys.publicKeyResource.length).toBeGreaterThan(0)
   })
 })

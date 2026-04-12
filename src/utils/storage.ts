@@ -1,37 +1,26 @@
-import type {
-  ChatMessage,
-  KnownRoom,
-  PersistedState,
-  WalletIdentity,
-} from '../types/chat'
+import type { ChatMessage, PersistedState, WalletIdentity } from '../types/chat'
 
-const LOCAL_STATE_KEY = 'web3-chat:local-state:v2'
-const SESSION_STATE_KEY = 'web3-chat:session-state:v2'
-const SESSION_IDENTITY_KEY = 'web3-chat:session-identity:v2'
-
-type PersistedRoomIndex = Omit<KnownRoom, 'createdBy' | 'inviteLink' | 'secret'>
-
-type SessionRoomState = {
-  inviteLink?: string
-  secret?: string
-}
+const LOCAL_STATE_KEY = 'web3-chat:local-state:v3'
+const SESSION_STATE_KEY = 'web3-chat:session-state:v3'
+const SESSION_IDENTITY_KEY = 'web3-chat:session-identity:v3'
 
 type LocalStateSnapshot = {
-  currentRoomId: string | null
-  rooms: PersistedRoomIndex[]
+  currentConversationId: string | null
+  messagesByConversation: Record<string, ChatMessage[]>
 }
 
 type SessionStateSnapshot = {
-  messagesByRoom: Record<string, ChatMessage[]>
-  roomsById: Record<string, SessionRoomState>
+  authToken: string | null
+  authExpiresAt: string | null
 }
 
 function emptyState(): PersistedState {
   return {
     identity: null,
-    rooms: [],
-    messagesByRoom: {},
-    currentRoomId: null,
+    authToken: null,
+    authExpiresAt: null,
+    currentConversationId: null,
+    messagesByConversation: {},
   }
 }
 
@@ -44,25 +33,17 @@ function readJson<T>(storage: Storage, key: string) {
   }
 }
 
-function mergeRooms(
-  roomIndex: PersistedRoomIndex[],
-  sessionRooms: Record<string, SessionRoomState>,
-) {
-  return roomIndex.map((room) => ({
-    ...room,
-    createdBy: 'local',
-    ...(sessionRooms[room.roomId] ?? {}),
-  }))
-}
+function sanitizeMessages(messagesByConversation: unknown) {
+  if (!messagesByConversation || typeof messagesByConversation !== 'object') {
+    return {}
+  }
 
-function stripRoom(room: KnownRoom): PersistedRoomIndex {
-  const {
-    createdBy: _createdBy,
-    secret: _secret,
-    inviteLink: _inviteLink,
-    ...safeRoom
-  } = room
-  return safeRoom
+  const normalizedEntries = Object.entries(messagesByConversation).filter(
+    ([conversationId, messages]) =>
+      typeof conversationId === 'string' && Array.isArray(messages),
+  )
+
+  return Object.fromEntries(normalizedEntries) as Record<string, ChatMessage[]>
 }
 
 export function loadPersistedState(): PersistedState {
@@ -70,10 +51,7 @@ export function loadPersistedState(): PersistedState {
     return emptyState()
   }
 
-  const localState = readJson<LocalStateSnapshot>(
-    window.localStorage,
-    LOCAL_STATE_KEY,
-  )
+  const localState = readJson<LocalStateSnapshot>(window.localStorage, LOCAL_STATE_KEY)
   const sessionState = readJson<SessionStateSnapshot>(
     window.sessionStorage,
     SESSION_STATE_KEY,
@@ -81,40 +59,39 @@ export function loadPersistedState(): PersistedState {
 
   return {
     identity: null,
-    rooms: mergeRooms(
-      localState?.rooms ?? [],
-      sessionState?.roomsById ?? {},
-    ),
-    messagesByRoom: sessionState?.messagesByRoom ?? {},
-    currentRoomId: localState?.currentRoomId ?? null,
+    authToken: sessionState?.authToken ?? null,
+    authExpiresAt: sessionState?.authExpiresAt ?? null,
+    currentConversationId: localState?.currentConversationId ?? null,
+    messagesByConversation: sanitizeMessages(localState?.messagesByConversation),
   }
 }
 
 export function savePersistedState(state: PersistedState) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
   const localSnapshot = {
-    currentRoomId: state.currentRoomId,
-    rooms: state.rooms.map(stripRoom),
+    currentConversationId: state.currentConversationId,
+    messagesByConversation: state.messagesByConversation,
   } satisfies LocalStateSnapshot
 
   const sessionSnapshot = {
-    messagesByRoom: state.messagesByRoom,
-    roomsById: state.rooms.reduce<Record<string, SessionRoomState>>(
-      (accumulator, room) => {
-        if (room.secret || room.inviteLink) {
-          accumulator[room.roomId] = {
-            ...(room.secret ? { secret: room.secret } : {}),
-            ...(room.inviteLink ? { inviteLink: room.inviteLink } : {}),
-          }
-        }
-
-        return accumulator
-      },
-      {},
-    ),
+    authToken: state.authToken,
+    authExpiresAt: state.authExpiresAt,
   } satisfies SessionStateSnapshot
 
   window.localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(localSnapshot))
   window.sessionStorage.setItem(SESSION_STATE_KEY, JSON.stringify(sessionSnapshot))
+}
+
+export function clearPersistedSession() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.sessionStorage.removeItem(SESSION_STATE_KEY)
+  window.sessionStorage.removeItem(SESSION_IDENTITY_KEY)
 }
 
 export function loadSessionIdentity() {
@@ -131,6 +108,10 @@ export function loadSessionIdentity() {
 }
 
 export function saveSessionIdentity(identity: WalletIdentity | null) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
   if (identity) {
     window.sessionStorage.setItem(SESSION_IDENTITY_KEY, JSON.stringify(identity))
     return

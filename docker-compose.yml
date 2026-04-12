@@ -1,0 +1,55 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      - coturn
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8787
+      DB_FILE: /data/web3-chat.sqlite
+      APP_ID: ${APP_ID:-web3-wallet-chat}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-168}
+      ENABLE_TEST_IDENTITY: ${ENABLE_TEST_IDENTITY:-false}
+      TURN_SECRET: ${TURN_SECRET:-change-me}
+      TURN_TTL_SECONDS: ${TURN_TTL_SECONDS:-3600}
+      STUN_URLS: ${STUN_URLS:-stun:${TURN_HOST:-127.0.0.1}:3478}
+      TURN_URLS: ${TURN_URLS:-turn:${TURN_HOST:-127.0.0.1}:3478?transport=udp,turn:${TURN_HOST:-127.0.0.1}:3478?transport=tcp}
+    volumes:
+      - backend-data:/data
+
+  coturn:
+    image: coturn/coturn:4.6.3
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - -n
+      - --listening-port=${TURN_PORT:-3478}
+      - --listening-ip=0.0.0.0
+      - --min-port=${TURN_MIN_PORT:-49160}
+      - --max-port=${TURN_MAX_PORT:-49200}
+      - --fingerprint
+      - --realm=${TURN_REALM:-turn.web3-chat.local}
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET:-change-me}
+      - --external-ip=${TURN_EXTERNAL_IP:-127.0.0.1}
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --stale-nonce=600
+      - --log-file=stdout
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /var/tmp
+
+volumes:
+  backend-data:

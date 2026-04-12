@@ -1,5 +1,6 @@
 import type { InvitePayload, RoomKind } from '../types/chat'
 import { parseIsoDate } from './format'
+import { generateCompactId } from './uuid'
 
 const ROOM_TITLE_LIMIT = 24
 const MAX_PEER_LIMIT = 8
@@ -26,7 +27,7 @@ export function sanitizeRoomTitle(title: string, fallback: RoomKind) {
 }
 
 export function generateRoomId() {
-  return crypto.randomUUID().replaceAll('-', '')
+  return generateCompactId()
 }
 
 export function generateRoomSecret() {

@@ -1,16 +1,10 @@
+import * as P256 from 'ox/P256'
+import * as PublicKey from 'ox/PublicKey'
+import * as Signature from 'ox/Signature'
+import * as Hex from 'ox/Hex'
 import type { ChatWireMessage, WalletIdentity } from '../types/chat'
 
 const encoder = new TextEncoder()
-
-const SESSION_KEY_ALGORITHM = {
-  name: 'ECDSA',
-  namedCurve: 'P-256',
-} satisfies EcKeyImportParams
-
-const SESSION_SIGNATURE_ALGORITHM = {
-  name: 'ECDSA',
-  hash: 'SHA-256',
-} satisfies EcdsaParams
 
 type SignableValue = boolean | number | string | null | SignableValue[] | {
   [key: string]: SignableValue
@@ -18,12 +12,50 @@ type SignableValue = boolean | number | string | null | SignableValue[] | {
 
 type MessageSigner = Pick<WalletIdentity, 'sessionPrivateKey'>
 
-function arrayBufferToBase64(buffer: ArrayBuffer) {
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+type BufferLike = ArrayLike<number> & {
+  toString(encoding: string): string
+}
+
+type BufferConstructorLike = {
+  from(input: Uint8Array | string, encoding?: string): BufferLike
+}
+
+function getBufferConstructor() {
+  return (globalThis as { Buffer?: BufferConstructorLike }).Buffer
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  if (typeof btoa === 'function') {
+    return btoa(String.fromCharCode(...bytes))
+  }
+
+  const BufferConstructor = getBufferConstructor()
+  if (!BufferConstructor) {
+    throw new Error('Base64 encoding is unavailable in the current runtime.')
+  }
+
+  return BufferConstructor.from(bytes).toString('base64')
 }
 
 function base64ToUint8Array(value: string) {
-  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
+  if (typeof atob === 'function') {
+    return Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
+  }
+
+  const BufferConstructor = getBufferConstructor()
+  if (!BufferConstructor) {
+    throw new Error('Base64 decoding is unavailable in the current runtime.')
+  }
+
+  return Uint8Array.from(BufferConstructor.from(value, 'base64'))
+}
+
+function base64ToPublicKey(value: string) {
+  return PublicKey.fromBytes(base64ToUint8Array(value))
+}
+
+function base64ToPrivateKey(value: string) {
+  return base64ToUint8Array(value)
 }
 
 function toBase64Url(value: string) {
@@ -51,42 +83,19 @@ function canonicalizePayload(payload: SignableValue) {
   return JSON.stringify(sortObjectKeys(payload))
 }
 
-async function importPrivateKey(serializedKey: string) {
-  return crypto.subtle.importKey(
-    'pkcs8',
-    base64ToUint8Array(serializedKey),
-    SESSION_KEY_ALGORITHM,
-    false,
-    ['sign'],
-  )
-}
-
-async function importPublicKey(serializedKey: string) {
-  return crypto.subtle.importKey(
-    'spki',
-    base64ToUint8Array(serializedKey),
-    SESSION_KEY_ALGORITHM,
-    false,
-    ['verify'],
-  )
+function toPayloadHex(payload: SignableValue) {
+  return Hex.fromBytes(encoder.encode(canonicalizePayload(payload)))
 }
 
 export async function generateSessionKeyPair() {
-  const keyPair = await crypto.subtle.generateKey(
-    SESSION_KEY_ALGORITHM,
-    true,
-    ['sign', 'verify'],
-  )
-
-  const [publicKey, privateKey] = await Promise.all([
-    crypto.subtle.exportKey('spki', keyPair.publicKey),
-    crypto.subtle.exportKey('pkcs8', keyPair.privateKey),
-  ])
+  const keyPair = P256.createKeyPair({ as: 'Bytes' })
+  const publicKey = PublicKey.toBytes(keyPair.publicKey)
+  const privateKey = keyPair.privateKey
 
   return {
-    publicKey: arrayBufferToBase64(publicKey),
-    publicKeyResource: toBase64Url(arrayBufferToBase64(publicKey)),
-    privateKey: arrayBufferToBase64(privateKey),
+    publicKey: bytesToBase64(publicKey),
+    publicKeyResource: toBase64Url(bytesToBase64(publicKey)),
+    privateKey: bytesToBase64(privateKey),
   }
 }
 
@@ -94,14 +103,13 @@ export async function signPayload(
   payload: SignableValue,
   identity: MessageSigner,
 ) {
-  const privateKey = await importPrivateKey(identity.sessionPrivateKey)
-  const signature = await crypto.subtle.sign(
-    SESSION_SIGNATURE_ALGORITHM,
-    privateKey,
-    encoder.encode(canonicalizePayload(payload)),
-  )
+  const signature = P256.sign({
+    payload: toPayloadHex(payload),
+    privateKey: base64ToPrivateKey(identity.sessionPrivateKey),
+    hash: true,
+  })
 
-  return arrayBufferToBase64(signature)
+  return Signature.toHex(signature)
 }
 
 export async function verifyPayloadSignature(
@@ -110,13 +118,12 @@ export async function verifyPayloadSignature(
   publicKey: string,
 ) {
   try {
-    const importedKey = await importPublicKey(publicKey)
-    return crypto.subtle.verify(
-      SESSION_SIGNATURE_ALGORITHM,
-      importedKey,
-      base64ToUint8Array(signature),
-      encoder.encode(canonicalizePayload(payload)),
-    )
+    return P256.verify({
+      payload: toPayloadHex(payload),
+      publicKey: base64ToPublicKey(publicKey),
+      signature: Signature.fromHex(signature as `0x${string}`),
+      hash: true,
+    })
   } catch {
     return false
   }

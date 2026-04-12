@@ -41,21 +41,32 @@ pnpm dev
 
 ```env
 VITE_STUN_SERVERS=stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302
+VITE_RELAY_URLS=
+VITE_SELF_HOSTED_RELAY_URLS=
+VITE_ENABLE_AUTO_HOST_RELAY=true
+VITE_AUTO_HOST_RELAY_PORT=7777
+VITE_RELAY_PROBE_TIMEOUT_MS=6000
+VITE_ACTIVE_RELAY_COUNT=4
 VITE_TURN_URLS=
 VITE_TURN_USERNAME=
 VITE_TURN_CREDENTIAL=
 VITE_PREFER_TURN=false
+VITE_ENABLE_TEST_IDENTITY=false
 VITE_TURN_ONLY_TIMEOUT_MS=6000
 VITE_INVITE_TTL_MS=43200000
 ```
 
 说明：
 
-- `VITE_RELAY_URLS` 留空时，会使用 `trystero` 内置的公开 relay 列表；只有你想强制指定自己的 relay 时才需要填写。
+- `VITE_RELAY_URLS` 是公共信令 relay 列表，不是 TURN / STUN。你如果只部署了 coturn，还不算配置了这里的 relay。
+- `VITE_SELF_HOSTED_RELAY_URLS` 用来显式填写你自己的 relay，例如 `ws://192.168.31.19:7777` 或 `wss://relay.example.com`。
+- `VITE_ENABLE_AUTO_HOST_RELAY=true` 时，如果页面本身跑在明文 HTTP 上，前端会自动先尝试 `ws://当前页面主机:7777`，很适合中国网络下的局域网 / 轻量部署。
+- 前端会先探测自建 relay，再探测公共 relay；探测不再只看 WebSocket 是否能打开，而是会做一次真实 Nostr 信令回环。`VITE_RELAY_PROBE_TIMEOUT_MS` 控制单个 relay 的探测超时，`VITE_ACTIVE_RELAY_COUNT` 控制实际优先使用多少条已探测可用的 relay。
 - 不配置 TURN 时，应用只会走 STUN。
 - 配置 TURN 后，前端会先尝试 `relay` 路径，再自动回退到混合模式。
 - 是否最终选中 TURN / STUN，也仍然受浏览器 ICE 行为和实际网络环境影响。
 - `VITE_TURN_URLS` 为空是默认安全起步，避免示例假地址导致首次连接必然超时。
+- `localhost / 127.0.0.1 / ::1` 默认会显示“测试身份”按钮；非本地环境如需启用，请设置 `VITE_ENABLE_TEST_IDENTITY=true`。
 
 ## 生产构建
 
@@ -89,6 +100,7 @@ pnpm test
 │   ├── architecture.md
 │   └── security.md
 ├── infra
+│   ├── relay-docker
 │   └── stun-docker
 └── src
 ```
@@ -98,5 +110,6 @@ pnpm test
 - [架构说明](./docs/architecture.md)
 - [安全说明](./docs/security.md)
 - [TURN / STUN Docker 部署](./infra/stun-docker/README.md)
+- [Relay Docker 部署](./infra/relay-docker/README.md)
 - [AI 协作文档](./AGENT.md)
 - [构建进度](./build_progress.md)

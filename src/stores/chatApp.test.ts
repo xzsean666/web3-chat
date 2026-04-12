@@ -4,6 +4,7 @@ import { buildInviteLink } from '../utils/invite'
 import type { InvitePayload, SharedWalletIdentity, WalletIdentity } from '../types/chat'
 
 const localIdentity = {
+  authMethod: 'wallet',
   address: '0x1111111111111111111111111111111111111111',
   chainId: 1,
   signature: '0xabc123',
@@ -17,6 +18,33 @@ const localIdentity = {
   appId: 'web3-wallet-chat',
   sessionPublicKey: 'public-key-local',
   sessionPrivateKey: 'private-key-local',
+} satisfies WalletIdentity
+
+const testIdentity = {
+  ...localIdentity,
+  authMethod: 'guest',
+  address: '0x9999999999999999999999999999999999999999',
+  chainId: 31337,
+  signature: '0xguest123',
+  message: JSON.stringify({
+    type: 'web3-chat-test-identity',
+    version: 1,
+    address: '0x9999999999999999999999999999999999999999',
+    chainId: 31337,
+    sessionId: 'session-test',
+    nonce: 'nonce-test',
+    issuedAt: new Date().toISOString(),
+    domain: 'localhost:5173',
+    origin: 'http://localhost:5173',
+    uri: 'http://localhost:5173',
+    appId: 'web3-wallet-chat',
+    sessionPublicKey: 'public-key-test',
+  }),
+  issuedAt: new Date().toISOString(),
+  nonce: 'nonce-test',
+  sessionId: 'session-test',
+  sessionPublicKey: 'public-key-test',
+  sessionPrivateKey: 'private-key-test',
 } satisfies WalletIdentity
 
 const trysteroState = vi.hoisted(() => {
@@ -95,6 +123,35 @@ const trysteroState = vi.hoisted(() => {
   }
 })
 
+const relayState = vi.hoisted(() => {
+  const selectReachableRelayUrlsMock = vi.fn()
+
+  function reset() {
+    selectReachableRelayUrlsMock.mockReset()
+    selectReachableRelayUrlsMock.mockImplementation(async (urls: string[]) => ({
+      selectedUrls: urls.slice(0, 4),
+      reachableRelays: urls.slice(0, 4).map((url, index) => ({
+        url,
+        ok: true,
+        latencyMs: index + 1,
+      })),
+      failedRelays: [],
+      usedFallback: false,
+    }))
+  }
+
+  reset()
+
+  return {
+    selectReachableRelayUrlsMock,
+    reset,
+  }
+})
+
+vi.mock('../utils/relay', () => ({
+  selectReachableRelayUrls: relayState.selectReachableRelayUrlsMock,
+}))
+
 vi.mock('trystero', () => ({
   joinRoom: (_config: unknown, roomId: string, callbacks: unknown) => {
     trysteroState.setLatestCallbacks(
@@ -149,6 +206,7 @@ vi.mock('trystero', () => ({
 
 vi.mock('../utils/wallet', () => ({
   connectWalletIdentity: vi.fn(async () => localIdentity),
+  connectTestIdentity: vi.fn(async () => testIdentity),
   shortAddress: (address: string) => `${address.slice(0, 6)}...${address.slice(-4)}`,
   toSharedWalletIdentity: (identity: WalletIdentity) => {
     const { sessionPrivateKey: _sessionPrivateKey, ...sharedIdentity } = identity
@@ -171,6 +229,7 @@ function createRemoteProof(
   address: `0x${string}`,
 ): SharedWalletIdentity {
   return {
+    authMethod: 'wallet',
     address,
     chainId: 1,
     signature: `0xproof-${suffix}`,
@@ -250,6 +309,7 @@ describe('chatApp store', () => {
     window.localStorage.clear()
     window.sessionStorage.clear()
     trysteroState.reset()
+    relayState.reset()
   })
 
   it('tracks outbound message delivery status', async () => {
@@ -279,6 +339,17 @@ describe('chatApp store', () => {
     )
 
     expect(getLastOutboundMessage(store)?.status).toBe('delivered')
+  })
+
+  it('can enter a room with a test identity', async () => {
+    const store = useChatAppStore()
+
+    await store.connectTestIdentity()
+    const room = await store.createRoom('private', '测试模式')
+
+    expect(store.identity?.authMethod).toBe('guest')
+    expect(room?.roomId).toBeTruthy()
+    expect(store.currentRoomId).toBe(room?.roomId)
   })
 
   it('marks outbound message as failed when send rejects', async () => {

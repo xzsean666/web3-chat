@@ -4,7 +4,10 @@ export type ConnectionState = 'idle' | 'joining' | 'ready' | 'error'
 
 export type TransportMode = 'turn-only' | 'hybrid' | 'stun-only'
 
+export type IdentityAuthMethod = 'wallet' | 'guest'
+
 export interface WalletIdentity {
+  authMethod?: IdentityAuthMethod
   address: `0x${string}`
   chainId: number
   signature: `0x${string}`
@@ -20,7 +23,9 @@ export interface WalletIdentity {
   sessionPrivateKey: string
 }
 
-export interface SharedWalletIdentity extends Omit<WalletIdentity, 'sessionPrivateKey'> {
+export interface SharedWalletIdentity
+  extends Omit<WalletIdentity, 'sessionPrivateKey' | 'authMethod'> {
+  authMethod: IdentityAuthMethod
   [key: string]: number | string
 }
 
@@ -125,14 +130,99 @@ export interface PeerProfile {
   address: `0x${string}`
   label: string
   sessionId: string
+  sessionPublicKey?: string
   joinedAt: string
   verifiedAt: string
-  proof: SharedWalletIdentity
+  proof?: SharedWalletIdentity
+}
+
+export interface BackendUser {
+  id: number
+  address: `0x${string}`
+  authMethod: IdentityAuthMethod
+  chainId: number | null
+  createdAt: string
+  updatedAt: string
+  lastSeenAt: string
+  online?: boolean
+}
+
+export interface FriendRecord {
+  id: number
+  status: 'pending' | 'accepted' | 'blocked'
+  direction: 'inbound' | 'outbound'
+  requesterUserId: number
+  createdAt: string
+  updatedAt: string
+  respondedAt?: string | null
+  friend: BackendUser
+  online?: boolean
+}
+
+export interface GroupMember {
+  id: number
+  address: `0x${string}`
+  addressLower: string
+  authMethod: IdentityAuthMethod
+  chainId: number | null
+  role: 'owner' | 'member'
+  joinedAt: string
+  online?: boolean
+}
+
+export interface GroupRecord {
+  id: string
+  name: string
+  createdByUserId: number
+  createdAt: string
+  updatedAt: string
+  role?: 'owner' | 'member'
+  onlineMemberCount: number
+  members: GroupMember[]
+}
+
+export interface ConversationSummary {
+  id: string
+  title: string
+  kind: RoomKind
+  directAddress?: `0x${string}`
+  groupId?: string
+  lastMessageAt?: string
+  onlineCount: number
+}
+
+export interface BackendSessionPayload {
+  token: string
+  expiresAt: string
+  user: BackendUser
+  session: {
+    tokenExpiresAt: string
+    sessionId: string
+    sessionPublicKey: string
+    authMethod: IdentityAuthMethod
+    chainId: number | null
+  }
+}
+
+export interface FriendsResponse {
+  friends: FriendRecord[]
+  pendingInbound: FriendRecord[]
+  pendingOutbound: FriendRecord[]
+}
+
+export interface GroupsResponse {
+  groups: GroupRecord[]
+}
+
+export interface TurnCredentialsResponse {
+  ttlSeconds: number
+  iceServers: RTCIceServer[]
 }
 
 export interface PersistedState {
   identity: WalletIdentity | null
-  rooms: KnownRoom[]
-  messagesByRoom: Record<string, ChatMessage[]>
-  currentRoomId: string | null
+  authToken: string | null
+  authExpiresAt: string | null
+  currentConversationId: string | null
+  messagesByConversation: Record<string, ChatMessage[]>
 }

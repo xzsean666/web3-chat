@@ -76,7 +76,7 @@ watch(
 
     <div v-else class="message-empty">
       <strong>等待消息</strong>
-      <p>复制邀请后，对方加入就能开始聊天。</p>
+      <p>连接建立后，消息会显示在这里。</p>
     </div>
   </div>
 </template>

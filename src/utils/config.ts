@@ -6,9 +6,7 @@ const DEFAULT_STUN_SERVERS = [
 const DEFAULT_HISTORY_LIMIT = 200
 const DEFAULT_MAX_MESSAGE_LENGTH = 1000
 const DEFAULT_HANDSHAKE_TTL_MS = 24 * 60 * 60 * 1000
-const DEFAULT_INVITE_TTL_MS = 12 * 60 * 60 * 1000
 const DEFAULT_MESSAGE_FRESHNESS_MS = 10 * 60 * 1000
-const DEFAULT_TURN_ONLY_TIMEOUT_MS = 6000
 
 function readCsv(value?: string) {
   return value
@@ -30,30 +28,75 @@ function parsePositiveInt(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
+function isLocalTestingHost() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
+}
+
+function normalizeBaseUrl(value: string) {
+  return value.replace(/\/+$/, '')
+}
+
+function deriveBackendBaseUrl() {
+  if (typeof window === 'undefined') {
+    return 'http://127.0.0.1:8787'
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
+  return `${protocol}//${window.location.hostname}:8787`
+}
+
+function deriveBackendWsUrl(baseUrl: string) {
+  const url = new URL('/ws', `${baseUrl}/`)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  return url.toString()
+}
+
+function dedupeIceServers(iceServers: RTCIceServer[]) {
+  const seen = new Set<string>()
+  const normalized: RTCIceServer[] = []
+
+  for (const server of iceServers) {
+    const urls = Array.isArray(server.urls) ? server.urls : [server.urls]
+    const key = JSON.stringify({
+      urls,
+      username: server.username ?? '',
+      credential: server.credential ?? '',
+    })
+
+    if (seen.has(key)) {
+      continue
+    }
+
+    seen.add(key)
+    normalized.push(server)
+  }
+
+  return normalized
+}
+
 const configuredStunServers = readCsv(import.meta.env.VITE_STUN_SERVERS)
-const stunUrls = configuredStunServers.length
-  ? configuredStunServers
-  : DEFAULT_STUN_SERVERS
-const turnUrls = readCsv(import.meta.env.VITE_TURN_URLS)
-const turnServers: RTCIceServer[] = turnUrls.length
-  ? [
-      {
-        urls: turnUrls,
-        username: import.meta.env.VITE_TURN_USERNAME,
-        credential: import.meta.env.VITE_TURN_CREDENTIAL,
-      },
-    ]
-  : []
-const stunServers: RTCIceServer[] = stunUrls.map((urls) => ({ urls }))
+const fallbackIceServers = (
+  configuredStunServers.length ? configuredStunServers : DEFAULT_STUN_SERVERS
+).map((urls) => ({ urls }))
+
+const backendBaseUrl = normalizeBaseUrl(
+  import.meta.env.VITE_BACKEND_BASE_URL?.trim() || deriveBackendBaseUrl(),
+)
+const backendWsUrl = (
+  import.meta.env.VITE_BACKEND_WS_URL?.trim() || deriveBackendWsUrl(backendBaseUrl)
+).trim()
 
 export const appConfig = {
   appId: import.meta.env.VITE_APP_ID?.trim() || 'web3-wallet-chat',
-  relayUrls: readCsv(import.meta.env.VITE_RELAY_URLS),
-  hasTurn: turnServers.length > 0,
-  preferTurn: parseBoolean(import.meta.env.VITE_PREFER_TURN, true),
-  turnOnlyTimeoutMs: parsePositiveInt(
-    import.meta.env.VITE_TURN_ONLY_TIMEOUT_MS,
-    DEFAULT_TURN_ONLY_TIMEOUT_MS,
+  backendBaseUrl,
+  backendWsUrl,
+  enableTestIdentity: parseBoolean(
+    import.meta.env.VITE_ENABLE_TEST_IDENTITY,
+    isLocalTestingHost(),
   ),
   roomHistoryLimit: parsePositiveInt(
     import.meta.env.VITE_ROOM_HISTORY_LIMIT,
@@ -67,47 +110,21 @@ export const appConfig = {
     import.meta.env.VITE_HANDSHAKE_TTL_MS,
     DEFAULT_HANDSHAKE_TTL_MS,
   ),
-  inviteTtlMs: parsePositiveInt(
-    import.meta.env.VITE_INVITE_TTL_MS,
-    DEFAULT_INVITE_TTL_MS,
-  ),
   messageFreshnessMs: parsePositiveInt(
     import.meta.env.VITE_MESSAGE_FRESHNESS_MS,
     DEFAULT_MESSAGE_FRESHNESS_MS,
   ),
+  fallbackIceServers,
 }
 
-export function getPreferredTransportMode() {
-  if (appConfig.hasTurn && appConfig.preferTurn) {
-    return 'turn-only' as const
-  }
-
-  return appConfig.hasTurn ? ('hybrid' as const) : ('stun-only' as const)
-}
-
-export function getFallbackTransportMode() {
-  return appConfig.hasTurn ? ('hybrid' as const) : ('stun-only' as const)
-}
-
-export function getRtcConfig(mode: 'turn-only' | 'hybrid' | 'stun-only') {
-  if (mode === 'turn-only' && turnServers.length) {
-    return {
-      iceServers: turnServers,
-      iceCandidatePoolSize: 4,
-      iceTransportPolicy: 'relay',
-    } satisfies RTCConfiguration
-  }
-
-  if (mode === 'hybrid') {
-    return {
-      iceServers: [...turnServers, ...stunServers],
-      iceCandidatePoolSize: 4,
-      iceTransportPolicy: 'all',
-    } satisfies RTCConfiguration
-  }
+export function buildRtcConfig(iceServers?: RTCIceServer[]) {
+  const normalized = dedupeIceServers([
+    ...(iceServers ?? []),
+    ...appConfig.fallbackIceServers,
+  ])
 
   return {
-    iceServers: stunServers,
+    iceServers: normalized,
     iceCandidatePoolSize: 4,
     iceTransportPolicy: 'all',
   } satisfies RTCConfiguration
