@@ -19,14 +19,31 @@ docker compose up -d
 
 上线前至少确认：
 
-- `turnserver.conf` 里的 `external-ip` 已改成你的公网 IP：`47.109.17.166`
+- 单公网 IP 主机时，`turnserver.conf` 里的 `external-ip` 已改成公网 IP
+- 云服务器如果是公网 IP + 内网 IP 分离的场景，`external-ip` 已改成 `公网IP/内网IP`
+- 当前这个仓库在阿里云上的实际可用写法是：`47.109.17.166/172.27.163.203`
 - `3478/tcp`
 - `3478/udp`
+- `49160-49200/tcp`
 - `49160-49200/udp`
 
 ## Docker bridge 关键注意
 
-如果你后面改回默认 bridge 网络，TURN 中继经常会失败，常见原因是 coturn 对外通告了不可达地址。
+即使你已经用了 `network_mode: host`，在阿里云 / 腾讯云这类公网 IP 映射到内网 IP 的环境里，`external-ip` 只写公网 IP 也可能失败。
+
+表现通常是：
+
+- 浏览器能拿到 relay candidate
+- 页面显示“正在建立 P2P 通道”
+- 最后 ICE / DTLS 失败，数据通道打不开
+
+这时优先改成：
+
+```text
+external-ip=<PUBLIC_IP>/<PRIVATE_IP>
+```
+
+如果你后面改回默认 bridge 网络，TURN 中继更容易失败，常见原因也是 coturn 对外通告了不可达地址。
 
 这时至少确认以下字段：
 
@@ -43,11 +60,13 @@ relay-ip=172.18.0.2
 ```
 
 如果你不想处理 bridge 地址映射，也可以在 Linux 上改用 `network_mode: host`。
+但如果机器本身就是公网 / 内网双地址结构，`host` 模式下也仍然建议写成 `公网IP/内网IP`。
 
 ## 默认暴露端口
 
 - `3478/tcp`
 - `3478/udp`
+- `49160-49200/tcp`
 - `49160-49200/udp`
 
 ## 默认账号

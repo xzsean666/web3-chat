@@ -1,15 +1,15 @@
 # Web3 Chat
 
-一个纯前端、移动端优先的 Web3 钱包聊天项目。
+一个前端 + 轻量后端、移动端优先的 Web3 钱包聊天项目。
 
 ## 已实现
 
 - 使用 EVM 钱包签名作为身份。
 - 私聊 / 群聊都基于 WebRTC Data Channel。
-- 不使用自建业务后端。
+- 后端负责身份、好友关系、群组和 WebRTC 信令，聊天内容仍走浏览器之间的 P2P 数据通道。
 - UI 基于 Vue 3 + PrimeVue，PC 端也固定为移动端视图。
 - 同时支持 TURN 和 STUN。
-- 如果配置了 TURN，前端会先尝试 relay-only，失败后再回退到 TURN + STUN 混合候选。
+- TURN 凭据由后端 `/api/turn-credentials` 动态下发。
 - 邀请链接带有效期。
 - 钱包签名、房间口令、邀请链接、消息历史只保存在 `sessionStorage`。
 - `localStorage` 只保留非敏感的房间索引，用于恢复最近列表。
@@ -31,6 +31,7 @@
 
 ```bash
 cp .env.example .env
+docker compose up -d
 pnpm install
 pnpm dev
 ```
@@ -40,32 +41,34 @@ pnpm dev
 ## 关键环境变量
 
 ```env
-VITE_STUN_SERVERS=stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302
-VITE_RELAY_URLS=
-VITE_SELF_HOSTED_RELAY_URLS=
-VITE_ENABLE_AUTO_HOST_RELAY=true
-VITE_AUTO_HOST_RELAY_PORT=7777
-VITE_RELAY_PROBE_TIMEOUT_MS=6000
-VITE_ACTIVE_RELAY_COUNT=4
-VITE_TURN_URLS=
-VITE_TURN_USERNAME=
-VITE_TURN_CREDENTIAL=
-VITE_PREFER_TURN=false
+VITE_BACKEND_BASE_URL=https://your-backend.example.com
+VITE_BACKEND_WS_URL=wss://your-backend.example.com/ws
+VITE_STUN_SERVERS=stun:YOUR_PUBLIC_IP:3478,stun:stun.cloudflare.com:3478
 VITE_ENABLE_TEST_IDENTITY=false
-VITE_TURN_ONLY_TIMEOUT_MS=6000
-VITE_INVITE_TTL_MS=43200000
+ALLOWED_ORIGINS=https://your-frontend.example.com,http://localhost:5173,http://127.0.0.1:5173
+TURN_SECRET=change-me
+TURN_TTL_SECONDS=3600
+TURN_REALM=YOUR_PUBLIC_IP
+TURN_EXTERNAL_IP=YOUR_PUBLIC_IP/YOUR_PRIVATE_IP
+TURN_PORT=3478
+TURN_MIN_PORT=49160
+TURN_MAX_PORT=49200
+STUN_URLS=stun:YOUR_PUBLIC_IP:3478
+TURN_URLS=turn:YOUR_PUBLIC_IP:3478?transport=udp,turn:YOUR_PUBLIC_IP:3478?transport=tcp
+VITE_HANDSHAKE_TTL_MS=86400000
+VITE_ROOM_HISTORY_LIMIT=200
+VITE_MAX_MESSAGE_LENGTH=1000
+VITE_MESSAGE_FRESHNESS_MS=600000
 ```
 
 说明：
 
-- `VITE_RELAY_URLS` 是公共信令 relay 列表，不是 TURN / STUN。你如果只部署了 coturn，还不算配置了这里的 relay。
-- `VITE_SELF_HOSTED_RELAY_URLS` 用来显式填写你自己的 relay，例如 `ws://192.168.31.19:7777` 或 `wss://relay.example.com`。
-- `VITE_ENABLE_AUTO_HOST_RELAY=true` 时，如果页面本身跑在明文 HTTP 上，前端会自动先尝试 `ws://当前页面主机:7777`，很适合中国网络下的局域网 / 轻量部署。
-- 前端会先探测自建 relay，再探测公共 relay；探测不再只看 WebSocket 是否能打开，而是会做一次真实 Nostr 信令回环。`VITE_RELAY_PROBE_TIMEOUT_MS` 控制单个 relay 的探测超时，`VITE_ACTIVE_RELAY_COUNT` 控制实际优先使用多少条已探测可用的 relay。
-- 不配置 TURN 时，应用只会走 STUN。
-- 配置 TURN 后，前端会先尝试 `relay` 路径，再自动回退到混合模式。
-- 是否最终选中 TURN / STUN，也仍然受浏览器 ICE 行为和实际网络环境影响。
-- `VITE_TURN_URLS` 为空是默认安全起步，避免示例假地址导致首次连接必然超时。
+- `VITE_BACKEND_BASE_URL` 和 `VITE_BACKEND_WS_URL` 必须指向你的对外可访问后端或反向代理地址。
+- `STUN_URLS` 和 `TURN_URLS` 对外填写的始终应该是公网地址。
+- `TURN_EXTERNAL_IP` 是 coturn 最容易填错的字段。
+- 单公网 IP 主机可以写成 `TURN_EXTERNAL_IP=YOUR_PUBLIC_IP`。
+- 阿里云 / 腾讯云 / EIP / NAT 这类公网 IP 和内网 IP 分离的场景，应该写成 `TURN_EXTERNAL_IP=YOUR_PUBLIC_IP/YOUR_PRIVATE_IP`。
+- 如果这里写错，页面可能能登录、能加好友、能拿到 relay candidate，但真实 TURN 中继会卡在“正在建立 P2P 通道”。
 - `localhost / 127.0.0.1 / ::1` 默认会显示“测试身份”按钮；非本地环境如需启用，请设置 `VITE_ENABLE_TEST_IDENTITY=true`。
 
 ## 生产构建
@@ -83,8 +86,7 @@ pnpm test
 
 ## 当前架构边界
 
-- 这是纯前端实现，没有业务后端。
-- WebRTC 初始发现仍依赖外部 relay 基础设施。
+- 项目包含一个轻量后端，但聊天内容本身不入库。
 - 真正的聊天消息通过浏览器之间的 P2P 数据通道传输，不经过你的业务后端。
 - 群聊仍然是 mesh 结构，适合小规模房间。
 - 浏览器 `localStorage` 中仍会留下房间索引元数据；如果你需要更高安全等级，仍应评估本地加密和设备安全。

@@ -35,6 +35,8 @@ services:
       - --realm=${TURN_REALM:-turn.web3-chat.local}
       - --use-auth-secret
       - --static-auth-secret=${TURN_SECRET:-change-me}
+      # Single public IP host: TURN_EXTERNAL_IP=<PUBLIC_IP>
+      # Cloud EIP / NAT host: TURN_EXTERNAL_IP=<PUBLIC_IP>/<PRIVATE_IP>
       - --external-ip=${TURN_EXTERNAL_IP:-127.0.0.1}
       - --no-cli
       - --no-tls
