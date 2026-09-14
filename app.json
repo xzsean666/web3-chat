@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Web3 Chat",
+    "slug": "web3-chat",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#EDEDED"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.web3chat.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#EDEDED"
+      },
+      "package": "com.web3chat.app"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
