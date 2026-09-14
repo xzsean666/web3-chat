@@ -39,8 +39,8 @@ export const TabNavigator: React.FC<TabNavigatorProps> = ({
   children,
 }) => {
   return (
-    <View style={styles.container} testID="tab-navigator">
-      <View style={styles.contentArea}>{children}</View>
+    <View style={children ? styles.container : styles.barOnlyContainer} testID="tab-navigator">
+      {children ? <View style={styles.contentArea}>{children}</View> : null}
 
       <View style={styles.tabBar} testID="tab-bar">
         {TAB_CONFIGS.map((tab) => {
@@ -90,7 +90,11 @@ export const TabNavigator: React.FC<TabNavigatorProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
+  },
+  barOnlyContainer: {
+    width: '100%',
+    backgroundColor: colors.tabBarBg,
   },
   contentArea: {
     flex: 1,

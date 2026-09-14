@@ -87,7 +87,11 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onOpenUrl }) => 
   };
 
   return (
-    <ScrollView style={styles.container} testID="discover-screen">
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      testID="discover-screen"
+    >
       {/* URL search bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputWrapper}>
@@ -155,6 +159,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    backgroundColor: '#F8FAFC',
+    paddingBottom: 24,
   },
   searchContainer: {
     flexDirection: 'row',

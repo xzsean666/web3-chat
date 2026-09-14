@@ -32,6 +32,7 @@
 - **未解决问题**: 无
 - **架构洞察与重要发现**:
   - Expo 52 + `react-native-web` 结合 Headless Chrome CDP 可以在无需移动端模拟器（Android AVD / iOS Simulator）的前提下，实现像素级移动端真机渲染和毫秒级自动化端到端走查。
+  - `TabNavigator` 具备包裹 `children` 与独立栏位双重形态；避免在同级并列渲染 `flex: 1` 占位容器导致高度等分及灰色空白（已彻底修复底侧灰色遮盖问题，全屏内容 100% 完整延伸无截断）。
   - 静态单页应用模式通过 URL Hash（如 `#chats`, `#chat_detail`, `#contacts` 等）实现无状态路由重载与弹窗激活，特别适合配合 CI/CD 流水线输出视觉走查快照。
 - **风险和假设**:
   - 运行 `pnpm test:visual` 需要本地安装有 Chrome 或 Chromium (`google-chrome`)。

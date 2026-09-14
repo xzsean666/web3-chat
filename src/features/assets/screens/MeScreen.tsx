@@ -47,7 +47,11 @@ export const MeScreen: React.FC<MeScreenProps> = ({
   };
 
   return (
-    <ScrollView style={styles.container} testID="me-screen">
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      testID="me-screen"
+    >
       {/* Profile Header */}
       <View style={styles.profileSection}>
         <View style={styles.avatar}>
@@ -171,6 +175,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    backgroundColor: '#F8FAFC',
+    paddingBottom: 28,
   },
   profileSection: {
     flexDirection: 'row',

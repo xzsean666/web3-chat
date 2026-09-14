@@ -94,6 +94,8 @@ export const ConversationListScreen: React.FC<ConversationListScreenProps> = ({
         keyExtractor={conversationKeyExtractor}
         renderItem={renderItem}
         ItemSeparatorComponent={ListSeparator}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
         initialNumToRender={12}
         maxToRenderPerBatch={10}
         windowSize={5}
@@ -122,6 +124,14 @@ export const ConversationListScreen: React.FC<ConversationListScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  list: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  listContent: {
+    flexGrow: 1,
     backgroundColor: '#FFFFFF',
   },
   convItem: {

@@ -21,7 +21,7 @@
 | 💬 会话列表 (Chats) | 💬 聊天流 & 红包 (Chat Detail) | 🧧 LuckyDrop 拆红包 (Claim Modal) |
 |:---:|:---:|:---:|
 | <img src="./test/visual/screenshots/01_chats_list.png" width="250" alt="会话列表" /> | <img src="./test/visual/screenshots/02_chat_detail.png" width="250" alt="聊天详情" /> | <img src="./test/visual/screenshots/03_red_packet_modal.png" width="250" alt="拆红包弹窗" /> |
-| **现代矢量图标与 Squircle 头像**<br/>Lucide 矢量搜索与加号、精细化平滑微阴影、置顶与单/群聊角标 | **现代双向气泡与金箔红包卡**<br/>Lucide 快捷发送面板、🔥 30s 销毁倒计时、LuckyDrop 专属烫金卡片 | **毛玻璃悬浮拆红包模态框**<br/>高饱和金币微质感徽章、渐变 Claim 交互、常数级 Gas Merkle 证明 |
+| **高饱和矢量图标与全屏会话流**<br/>Lucide 矢量搜索与加号、精细化平滑微阴影、置顶与单/群聊角标、无截断纯白背景 | **现代双向气泡与金箔红包卡**<br/>Lucide 快捷发送面板、🔥 30s 销毁倒计时、LuckyDrop 专属烫金卡片 | **毛玻璃悬浮拆红包模态框**<br/>高饱和金币微质感徽章、渐变 Claim 交互、常数级 Gas Merkle 证明 |
 
 ---
 
@@ -30,7 +30,7 @@
 | 👥 通讯录分组 (Contacts) | ➕ 添加朋友 (Add Friend) | 🧭 发现页面 (Discover) |
 |:---:|:---:|:---:|
 | <img src="./test/visual/screenshots/04_contacts_list.png" width="250" alt="通讯录" /> | <img src="./test/visual/screenshots/05_add_friend.png" width="250" alt="添加朋友" /> | <img src="./test/visual/screenshots/06_discover.png" width="250" alt="发现页面" /> |
-| **A-Z 索引与矢量生态入口**<br/>Lucide 柔和彩色圆角功能入口、Squircle 好友头像、ENS 备注 | **快捷扫码与地址校验面板**<br/>内置快速粘贴与扫码入口、EVM 0x 格式智能感知与校验提示 | **精选 DApp 现代磁贴矩阵**<br/>Lucide 矢量外链与徽标、分类标签、LuckyDrop & DEX 生态直达 |
+| **全量 A-Z 好友索引与生态入口**<br/>彩色圆角功能入口、Squircle 头像、全屏连续好友列表与 ENS 备注 | **快捷扫码与地址校验面板**<br/>内置快速粘贴与扫码入口、EVM 0x 格式智能感知与校验提示 | **精选 Web3 DApp 现代磁贴矩阵**<br/>全景呈现 LuckyDrop、PancakeSwap、BscScan、BNB 水龙头等生态入口 |
 
 ---
 
@@ -39,7 +39,7 @@
 | 🛡️ 签名授权抽屉 (Sign Sheet) | 👤 个人中心与多链资产 (Me) | 🌐 切换网络面板 (Chain Switch) |
 |:---:|:---:|:---:|
 | <img src="./test/visual/screenshots/07_sign_approval_sheet.png" width="250" alt="签名授权抽屉" /> | <img src="./test/visual/screenshots/08_me_assets.png" width="250" alt="个人资产" /> | <img src="./test/visual/screenshots/09_chain_switch_modal.png" width="250" alt="切换网络" /> |
-| **安全加固防钓鱼签名抽屉**<br/>高危安全警示、等宽十六进制报文预览盒与一键复制、二次授权确认 | **Web3 渐变卡片与多链资产**<br/>深绿渐变钱包卡片、快捷操作矩阵 (转账/收款/扫码/发红包)、Multicall3 资产看板 | **现代网络选择器与活跃状态**<br/>Lucide 动态网络节点指示、绿色激活勾选徽章、主备 RPC 实时状态 |
+| **安全加固防钓鱼签名抽屉**<br/>高危安全警示、等宽十六进制报文预览盒与一键复制、二次授权确认 | **Web3 渐变卡片与多链全景资产**<br/>深绿钱包卡片、快捷操作矩阵、全量呈现 BNB/USDT/LUCKY 资产与私钥备份入口 | **现代网络选择器与活跃状态**<br/>Lucide 动态网络节点指示、绿色激活勾选徽章、主备 RPC 实时状态 |
 
 ---
 

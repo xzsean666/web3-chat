@@ -91,6 +91,28 @@ const MOCK_CONVERSATIONS: Conversation[] = [
     peer_address: '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
     updated_at: Math.floor(Date.now() / 1000) - 172800,
   },
+  {
+    id: 'conv-vitalik',
+    type: 'dm',
+    title: 'Vitalik Buterin',
+    avatar: '👤',
+    last_message: 'Next layer-2 scaling workshop starts at 18:00 UTC',
+    last_message_at: Math.floor(Date.now() / 1000) - 259200,
+    unread_count: 0,
+    peer_address: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+    updated_at: Math.floor(Date.now() / 1000) - 259200,
+  },
+  {
+    id: 'conv-bnb-devs',
+    type: 'group',
+    title: 'BNB Chain Core Developers (42)',
+    avatar: '👥',
+    last_message: 'Alice: BEP-336 Blob transactions are now live on testnet!',
+    last_message_at: Math.floor(Date.now() / 1000) - 345600,
+    unread_count: 0,
+    group_id: 'group_bnb_devs',
+    updated_at: Math.floor(Date.now() / 1000) - 345600,
+  },
 ];
 
 const MOCK_PACKET_PAYLOAD: PacketMessagePayload = {
@@ -402,19 +424,20 @@ export const VisualHarness: React.FC<VisualHarnessProps> = ({ initialScene = 'ch
         />
       )}
 
-      {/* Main Screen Body */}
-      <View style={styles.body}>
-        {renderMainContent()}
-      </View>
-
-      {/* Bottom Tab Bar (hidden in full-screen detail views) */}
-      {!isFullscreenSubScreen && (
+      {/* Main Screen Body: Tab screens are nested in TabNavigator, sub-screens in View */}
+      {!isFullscreenSubScreen ? (
         <TabNavigator
           activeTab={activeTab}
           onTabChange={handleTabChange}
           chatUnreadCount={2}
           hasDiscoverUpdate={true}
-        />
+        >
+          {renderMainContent()}
+        </TabNavigator>
+      ) : (
+        <View style={styles.body}>
+          {renderMainContent()}
+        </View>
       )}
 
       {/* Overlays / Modals */}
@@ -465,11 +488,11 @@ export const VisualHarness: React.FC<VisualHarnessProps> = ({ initialScene = 'ch
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: '#FFFFFF',
     height: '100%',
   },
   body: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
   },
 });

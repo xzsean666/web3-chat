@@ -93,6 +93,8 @@ export const ContactsScreen: React.FC<ContactsScreenProps> = ({
         sections={sections}
         keyExtractor={(item) => item.address}
         ListHeaderComponent={renderHeader}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
         renderSectionHeader={({ section: { title } }) => (
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionHeaderText}>{title}</Text>
@@ -133,6 +135,14 @@ export const ContactsScreen: React.FC<ContactsScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  list: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  listContent: {
+    flexGrow: 1,
     backgroundColor: '#FFFFFF',
   },
   searchBarContainer: {
