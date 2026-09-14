@@ -8,7 +8,6 @@
 # 3. web3-chat-contract (/ssd0/git/web3-chat-contract) - On-Chain Social Protocol & SDK
 # 4. LuckyDrop          (/ssd0/git/LuckyDrop)          - Red Packet Smart Contract & SDK
 # 5. evm-call           (/ssd0/git/evm-call)           - Unified EVM RPC Pool & Multicall Gateway
-# 6. EVM-Data-SDK       (/ssd0/git/EVM-Data-SDK)       - Indexed EVM Data SDK & Provider Routing
 # ==============================================================================
 
 set -eo pipefail
@@ -52,11 +51,6 @@ fi
 if [ ! -d "/ssd0/git/evm-call/dist" ]; then
   echo -e "${C_BLUE}--> Building evm-call...${C_RESET}"
   pnpm --dir /ssd0/git/evm-call run build
-fi
-
-if [ ! -d "/ssd0/git/EVM-Data-SDK/dist" ]; then
-  echo -e "${C_BLUE}--> Building EVM-Data-SDK...${C_RESET}"
-  pnpm --dir /ssd0/git/EVM-Data-SDK run build
 fi
 
 # 3. Run typecheck

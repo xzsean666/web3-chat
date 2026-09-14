@@ -34,7 +34,6 @@
     "@types/react": "~18.3.12",
     "@types/react-native": "~0.72.8",
     "@web3-chat/sdk": "file:../web3-chat-contract/sdk",
-    "evm-data-sdk": "file:../EVM-Data-SDK",
     "hono": "^4.13.7",
     "typescript": "^5.3.3",
     "vitest": "^2.1.8"

@@ -36,9 +36,8 @@ graph TD
         Token["MockERC20 (LRPT)"]
     end
 
-    subgraph Infra["底层设施 SDK (evm-call & EVM-Data-SDK)"]
+    subgraph Infra["底层设施 SDK (evm-call)"]
         EvmCall["evm-call (RPC Pool & Multicall3)"]
-        EvmData["EVM-Data-SDK (Multi-Provider Route)"]
         Anvil["Local Anvil Node (Port 8548)"]
     end
 
@@ -64,7 +63,6 @@ graph TD
     Factory <--> RelMgr
     LuckyProxy --> LuckyImpl
     LuckyImpl --> Token
-    EvmData -.->|Config & Route| Anvil
 ```
 
 ---

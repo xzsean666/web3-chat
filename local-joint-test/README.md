@@ -13,7 +13,6 @@
 | 3 | `/ssd0/git/web3-chat-contract` | Solidity 智能合约 & `@web3-chat/sdk` | 链上主权身份克隆 (`UserImplementation`)、关系管理与握手 (`RelationshipManager`)、群组创建/加群/禁言治理 (`GroupImplementation`)、工厂 (`ChatStorageFactory`)。 |
 | 4 | `/ssd0/git/LuckyDrop` | ERC-20 红包主合约 (`LuckyDrop.sol`)、UUPS 代理 (`LuckyDropProxy.sol`) & `@luckydrop/sdk` | 代币授权、链上红包创建、Merkle Tree 根计算、群聊红包卡片生成、密码学 Merkle Proof 生成与本地校验、链上领取与防双花。 |
 | 5 | `/ssd0/git/evm-call` | 统一轻量 EVM RPC 基座 | 本地节点 RPC 连接池、健康探测、Batch / Multicall3 批量调用通道、链上 Gas 与 FeeHistory 查询。 |
-| 6 | `/ssd0/git/EVM-Data-SDK` | EVM 聚合数据基座 | 数据源标准化配置解析、存储适配器与多链路由生命周期管理。 |
 
 ---
 
@@ -21,7 +20,7 @@
 
 ```mermaid
 flowchart TD
-    S1["Stage 1: 基础设施 & EVM RPC 基座\n(Anvil 8548 + evm-call + 合约部署 + EVM-Data-SDK)"] --> S2["Stage 2: 链上主权身份克隆 & 资料同步\n(ChatStorageFactory + UserClone + @web3-chat/sdk)"]
+    S1["Stage 1: 基础设施 & EVM RPC 基座\n(Anvil 8548 + evm-call + 合约部署)"] --> S2["Stage 2: 链上主权身份克隆 & 资料同步\n(ChatStorageFactory + UserClone + @web3-chat/sdk)"]
     S2 --> S3["Stage 3: EIP-191 SIWE 认证与跨层资料联调\n(web3-chat-worker /auth/verify + /users/:address)"]
     S3 --> S4["Stage 4: 链上双向好友握手与黑名单防御\n(RelationshipManager + 链上封禁 + Worker 消息拦截)"]
     S4 --> S5["Stage 5: Local-First 离线队列与增量同步\n(StorageEngine + PeriodicSync + ACK 读状态流水)"]
@@ -31,11 +30,10 @@ flowchart TD
     S8 --> S9["Stage 9: DApp 浏览器 WebView EIP-1193 桥接\n(Provider RPC 转发 + eth_chainId + eth_call 穿透)"]
 ```
 
-### 1. Stage 1: 基础设施、EVM RPC 节点池、合约部署与 Data SDK 验证
+### 1. Stage 1: 基础设施、EVM RPC 节点池与合约部署验证
 - 启动本地真实 Anvil 测试链（Port `8548`）。
 - 部署 `UserImplementation`、`GroupImplementation`、`ChatStorageFactory`、`RelationshipManager`、`MockERC20` (LRPT)、`LuckyDrop` 与 `LuckyDropProxy`。
 - 验证 `evm-call` 对本地链的 RPC 节点探测与 `getFeeHistory` 查询。
-- 验证 `EVM-Data-SDK` 客户端配置初始化。
 
 ### 2. Stage 2: 链上主权身份克隆与资料同步
 - Alice 与 Bob 调用 `@web3-chat/sdk` 的 `createUser()` 生成独立的 EIP-1167 极简代理克隆合约。

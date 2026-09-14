@@ -14,12 +14,10 @@ graph TD
     SocialContract["📜 web3-chat-contract<br/>(/ssd0/git/web3-chat-contract)"]
     LuckyDrop["🧧 LuckyDrop<br/>(/ssd0/git/LuckyDrop)"]
     EvmCall["🌐 evm-call<br/>(/ssd0/git/evm-call)"]
-    EvmData["📊 EVM-Data-SDK<br/>(/ssd0/git/EVM-Data-SDK)"]
 
     App -->|"pnpm dependency<br/>file:../evm-call"| EvmCall
     App -->|"pnpm devDependency<br/>file:../web3-chat-contract/sdk"| SocialContract
     App -->|"vitest alias & src import<br/>../LuckyDrop/sdk/src"| LuckyDrop
-    App -->|"pnpm devDependency<br/>file:../EVM-Data-SDK"| EvmData
     App -->|"HTTP API / SIWE 鉴权<br/>/sync, /messages, /auth"| Worker
 
     Worker -->|"ContractService<br/>RPC 读取验证"| SocialContract
@@ -29,7 +27,7 @@ graph TD
 
 ---
 
-## 2. 6 大依赖仓库详单与连接机制
+## 2. 5 大依赖仓库详单与连接机制
 
 ### 2.1 主项目：`web3-chat` (当前仓库)
 - **本地绝对路径**: `/ssd0/git/web3-chat`
@@ -112,17 +110,6 @@ graph TD
   - 路由: `src/routes/auth.ts`, `src/routes/sync.ts`, `src/routes/messages.ts`
   - 业务层: `src/services/auth.ts`, `src/services/sync.ts`, `src/services/sweeper.ts`
   - 测试辅助: `test/helpers/db.ts`, `test/helpers/r2.ts`
-
----
-
-### 2.6 `EVM-Data-SDK` (多链聚合数据基座)
-- **本地绝对路径**: `/ssd0/git/EVM-Data-SDK`
-- **引用方式**:
-  - `package.json` devDependencies: `"evm-data-sdk": "file:../EVM-Data-SDK"`
-- **核心提供功能**:
-  - 多链历史数据索引、DeFi 汇率快照、标准化 Provider 路由适配。
-- **关联源码位置**:
-  - `src/domain/`, `src/client/`
 
 ---
 

@@ -20,7 +20,7 @@
   14. `TASK-014`: 本地全系统端到端联合测试套件 `test/e2e/helpers.ts` 与 `test/e2e/jointFlow.test.ts`，涵盖双设备钱包创建、BSC 节点连接、SIWE 认证、离线会话拉取、链上好友、红包 Claim 与 DApp 桥接（DONE）。
   15. `TASK-015`: 全面安全审计与加固、存储与渲染性能优化、回归测试与审计报告（DONE）。
   16. `TASK-016`: 本地无头 Chrome 移动端视口模拟 (iPhone 15 390×844 @3x DPR)、全场景高保真界面走查与截图套件 (`VisualHarness.tsx`, `runVisualE2E.mjs`, `pnpm test:visual` 采集全部 9 张高保真真机截图)（DONE）。
-  17. `TASK-LOCAL-JOINT`: 本地全生态多仓库实机端到端联合测试工程 (`local-joint-test/`)，无 Mock 真实贯通 Anvil (8548) 链、`evm-call`、`EVM-Data-SDK`、`web3-chat-contract`、`LuckyDrop`、`web3-chat-worker` (D1 + R2) 与 `web3-chat`，9 大 Stage 覆盖率 100% 全部绿色通过（DONE）。
+  17. `TASK-LOCAL-JOINT`: 本地全生态多仓库实机端到端联合测试工程 (`local-joint-test/`)，无 Mock 真实贯通 Anvil (8548) 链、`evm-call`、`web3-chat-contract`、`LuckyDrop`、`web3-chat-worker` (D1 + R2) 与 `web3-chat`，9 大 Stage 覆盖率 100% 全部绿色通过（DONE）。
   18. `TASK-LOCAL-JOINT-COMPLEX`: 本地全生态高复杂度场景与安全对抗联合验证套件 (`local-joint-test/complexJointCases.test.ts`)，涵盖阅后即焚生命周期与 Sweeper 双存储物理擦除、深度群组治理与两阶段主权移交、拼手气随机红包与 Merkle 冒领拦截/超时退款、高并发突发投递与游标分页完整性、安全对抗用例（重放 401、冒签 401、越权撤回 403）、原子级 Multicall3 批量跨合约聚合，6 大高难度用例 100% 绿色通过（DONE）。
 - **已运行的验证命令及结果**:
   - `pnpm typecheck`: `tsc --noEmit` 成功，0 错误，退出码 0。

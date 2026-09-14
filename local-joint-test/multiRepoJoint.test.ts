@@ -24,7 +24,6 @@ import {
   type AnvilInstance,
   type DeployedAllProtocols,
 } from './deployAllProtocols';
-import { EvmDataClient } from 'evm-data-sdk';
 
 // Client App Modules from web3-chat
 import {
@@ -273,13 +272,6 @@ describe('Comprehensive Multi-Repo Joint Integration & Local Verification Suite'
     const feeHistory = await deployed.evmCallClient.getFeeHistory(4, 'latest', [25, 75]);
     expect(feeHistory).toBeDefined();
     expect(feeHistory.baseFeePerGas.length).toBeGreaterThan(0);
-
-    // 5. Verify EVM-Data-SDK client initialization
-    const dataClient = new EvmDataClient({
-      storage: { url: ':memory:' },
-      requestPolicy: { allowDirect: true },
-    });
-    expect(dataClient).toBeDefined();
   });
 
   // =========================================================================
