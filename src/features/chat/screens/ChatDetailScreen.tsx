@@ -7,12 +7,13 @@ import {
   Text,
   StyleSheet,
   SafeAreaView,
-  Alert,
 } from 'react-native';
 import { colors } from '../../../theme/colors';
 import { HeaderBar } from '../../../components/common/HeaderBar';
 import { MessageBubble, MemoMessageBubble, canRecallMessage } from '../components/MessageBubble';
 import { ChatInputBar } from '../components/ChatInputBar';
+import { Icon } from '../../../components/common/Icon';
+import { radii, shadows } from '../../../theme/design';
 import type { ChatMessage, Conversation } from '../../../types';
 
 export interface ChatDetailScreenProps {
@@ -70,11 +71,22 @@ export const ChatDetailScreen: React.FC<ChatDetailScreenProps> = ({
     selectedMessage.sender_id.toLowerCase() === myAddr &&
     canRecallMessage(selectedMessage);
 
+  const formatSubtitle = () => {
+    if (conversation.type === 'dm' && conversation.peer_address) {
+      const addr = conversation.peer_address;
+      if (addr.length > 12) {
+        return `${addr.slice(0, 6)}...${addr.slice(-4)} • BSC`;
+      }
+      return addr;
+    }
+    return undefined;
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} testID="chat-detail-screen">
       <HeaderBar
         title={conversation.title}
-        subtitle={conversation.type === 'dm' ? conversation.peer_address : undefined}
+        subtitle={formatSubtitle()}
         leftAction={{
           label: '‹ Back',
           onPress: onBack,
@@ -89,6 +101,7 @@ export const ChatDetailScreen: React.FC<ChatDetailScreenProps> = ({
         keyExtractor={keyExtractor}
         renderItem={renderMessageItem}
         contentContainerStyle={styles.messageListContent}
+        style={styles.messageList}
         testID="chat-message-list"
         initialNumToRender={15}
         maxToRenderPerBatch={10}
@@ -120,7 +133,8 @@ export const ChatDetailScreen: React.FC<ChatDetailScreenProps> = ({
               onPress={() => setSelectedMessage(null)}
               testID="action-copy-btn"
             >
-              <Text style={styles.modalMenuText}>Copy</Text>
+              <Icon name="copy" size={18} color="#0F172A" />
+              <Text style={styles.modalMenuText}>Copy Message</Text>
             </TouchableOpacity>
 
             {isEligibleForRecall && (
@@ -129,7 +143,8 @@ export const ChatDetailScreen: React.FC<ChatDetailScreenProps> = ({
                 onPress={handleRecall}
                 testID="action-recall-btn"
               >
-                <Text style={[styles.modalMenuText, styles.recallText]}>Recall (30s)</Text>
+                <Icon name="clock" size={18} color="#EF4444" />
+                <Text style={[styles.modalMenuText, styles.recallText]}>Recall (within 30s)</Text>
               </TouchableOpacity>
             )}
 
@@ -138,7 +153,7 @@ export const ChatDetailScreen: React.FC<ChatDetailScreenProps> = ({
               onPress={() => setSelectedMessage(null)}
               testID="action-cancel-btn"
             >
-              <Text style={styles.modalMenuText}>Cancel</Text>
+              <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -150,40 +165,55 @@ export const ChatDetailScreen: React.FC<ChatDetailScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: '#EDEDED',
+  },
+  messageList: {
+    flex: 1,
+    backgroundColor: '#EDEDED',
   },
   messageListContent: {
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalMenu: {
-    width: 220,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
+    width: 240,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.lg,
     overflow: 'hidden',
-    elevation: 8,
+    ...shadows.modal,
   },
   modalMenuItem: {
-    paddingVertical: 14,
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 18,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
+    gap: 12,
   },
   modalMenuText: {
-    fontSize: 16,
-    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#0F172A',
+    marginLeft: 8,
   },
   recallText: {
-    color: colors.badgeRed,
-    fontWeight: '600',
+    color: '#EF4444',
   },
   cancelItem: {
     borderBottomWidth: 0,
-    backgroundColor: colors.surfaceSubtle,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelText: {
+    fontSize: 15,
+    color: '#64748B',
+    fontWeight: '500',
   },
 });

@@ -7,6 +7,8 @@ import {
   StyleSheet,
 } from 'react-native';
 import { colors } from '../../../theme/colors';
+import { Icon } from '../../../components/common/Icon';
+import { radii, shadows } from '../../../theme/design';
 
 export interface ChatInputBarProps {
   onSend: (text: string, options?: { retention?: 'permanent' | 'on_read'; burn_after_seconds?: number }) => void;
@@ -34,6 +36,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     setText('');
   };
 
+  const hasText = text.trim().length > 0;
+
   return (
     <View style={styles.container} testID="chat-input-bar">
       <View style={styles.inputRow}>
@@ -41,8 +45,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           style={styles.input}
           value={text}
           onChangeText={setText}
-          placeholder={burnOnRead ? '🔥 Ephemeral (Burns 30s after read)...' : 'Type a message...'}
-          placeholderTextColor={colors.textTertiary}
+          placeholder={burnOnRead ? 'Ephemeral message (burns 30s after read)...' : 'Type a message...'}
+          placeholderTextColor="#94A3B8"
           multiline
           maxLength={1000}
           editable={!disabled}
@@ -53,17 +57,21 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           style={styles.moreButton}
           onPress={() => setShowMenu(!showMenu)}
           testID="chat-input-more-btn"
+          activeOpacity={0.7}
         >
-          <Text style={styles.moreButtonText}>＋</Text>
+          <Icon name="plus" size={20} color="#475569" strokeWidth={2.4} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.sendButton, (!text.trim() || disabled) && styles.sendButtonDisabled]}
+          style={[styles.sendButton, (!hasText || disabled) && styles.sendButtonDisabled]}
           onPress={handleSend}
-          disabled={!text.trim() || disabled}
+          disabled={!hasText || disabled}
           testID="chat-send-btn"
+          activeOpacity={0.7}
         >
-          <Text style={styles.sendButtonText}>Send</Text>
+          <Text style={[styles.sendButtonText, (!hasText || disabled) && styles.sendButtonTextDisabled]}>
+            Send
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -76,9 +84,10 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               onOpenRedPacket?.();
             }}
             testID="menu-red-packet-btn"
+            activeOpacity={0.7}
           >
-            <View style={[styles.menuIconContainer, { backgroundColor: colors.redPacketBg }]}>
-              <Text style={styles.menuItemIcon}>🧧</Text>
+            <View style={[styles.menuIconContainer, { backgroundColor: '#FA4E38' }]}>
+              <Icon name="gift" size={26} color="#FDE49E" strokeWidth={2.2} />
             </View>
             <Text style={styles.menuItemLabel}>Red Packet</Text>
           </TouchableOpacity>
@@ -90,14 +99,15 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               setShowMenu(false);
             }}
             testID="menu-burn-on-read-btn"
+            activeOpacity={0.7}
           >
             <View
               style={[
                 styles.menuIconContainer,
-                { backgroundColor: burnOnRead ? colors.badgeRed : '#7F7F7F' },
+                { backgroundColor: burnOnRead ? '#EF4444' : '#64748B' },
               ]}
             >
-              <Text style={styles.menuItemIcon}>🔥</Text>
+              <Icon name="flame" size={26} color="#FFFFFF" strokeWidth={2.2} />
             </View>
             <Text style={styles.menuItemLabel}>
               {burnOnRead ? 'Burn (Active)' : 'Burn on Read'}
@@ -111,82 +121,84 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderTopColor: 'rgba(0, 0, 0, 0.08)',
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
   },
   input: {
     flex: 1,
-    minHeight: 38,
+    minHeight: 40,
     maxHeight: 100,
-    backgroundColor: colors.surface,
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 16,
-    color: colors.textPrimary,
+    backgroundColor: '#F1F5F9',
+    borderRadius: radii.xl,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    fontSize: 15,
+    color: '#0F172A',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
   },
   moreButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
-  },
-  moreButtonText: {
-    fontSize: 20,
-    color: colors.textSecondary,
-    lineHeight: 22,
   },
   sendButton: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 6,
+    paddingHorizontal: 16,
+    height: 38,
+    borderRadius: 19,
     marginLeft: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.subtle,
   },
   sendButtonDisabled: {
-    backgroundColor: colors.border,
+    backgroundColor: '#E2E8F0',
   },
   sendButtonText: {
-    color: colors.textInverse,
+    color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 14,
   },
+  sendButtonTextDisabled: {
+    color: '#94A3B8',
+  },
   menuPanel: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: colors.backgroundLight,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    backgroundColor: '#F8FAFC',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
+    borderTopColor: 'rgba(0, 0, 0, 0.06)',
   },
   menuItem: {
     alignItems: 'center',
-    marginRight: 24,
+    marginRight: 28,
   },
   menuIconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  menuItemIcon: {
-    fontSize: 26,
+    ...shadows.subtle,
   },
   menuItemLabel: {
     fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 6,
+    color: '#475569',
+    marginTop: 8,
+    fontWeight: '500',
   },
 });

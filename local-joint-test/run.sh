@@ -11,6 +11,7 @@
 # ==============================================================================
 
 set -eo pipefail
+export VITEST_JOINT=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"

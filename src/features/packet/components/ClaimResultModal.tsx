@@ -5,9 +5,10 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Platform,
 } from 'react-native';
 import { colors } from '../../../theme/colors';
+import { Icon } from '../../../components/common/Icon';
+import { radii, shadows } from '../../../theme/design';
 import type { PacketMessagePayload } from '../../../types';
 
 export interface ClaimResultModalProps {
@@ -36,24 +37,27 @@ export const ClaimResultModal: React.FC<ClaimResultModalProps> = ({
           {/* Top curve decoration */}
           <View style={styles.topCurvedHeader}>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} testID="btn-close-claim-modal">
-              <Text style={styles.closeBtnText}>✕</Text>
+              <Icon name="close" size={20} color="rgba(255, 255, 255, 0.85)" />
             </TouchableOpacity>
             <View style={styles.avatarCircle}>
-              <Text style={styles.avatarEmoji}>🧧</Text>
+              <Icon name="gift" size={24} color="#D44A26" strokeWidth={2.4} />
             </View>
           </View>
 
           <View style={styles.body}>
             <Text style={styles.wishText}>{payload.wishText}</Text>
             <Text style={styles.typeText}>
-              {payload.tokenSymbol} Red Packet
+              {payload.tokenSymbol} LuckyDrop Red Packet
             </Text>
 
             {claimedAmount ? (
               <View style={styles.amountContainer} testID="claimed-amount-display">
                 <Text style={styles.amountNumber}>{claimedAmount}</Text>
                 <Text style={styles.amountUnit}>{payload.tokenSymbol}</Text>
-                <Text style={styles.successNote}>Deposited to your Web3 wallet</Text>
+                <View style={styles.badgeSuccess}>
+                  <Icon name="check" size={12} color="#07C160" strokeWidth={3} />
+                  <Text style={styles.successNote}>Deposited to your Web3 wallet</Text>
+                </View>
               </View>
             ) : (
               <View style={styles.actionContainer}>
@@ -62,9 +66,10 @@ export const ClaimResultModal: React.FC<ClaimResultModalProps> = ({
                   onPress={onClaim}
                   disabled={isClaiming}
                   testID="btn-open-packet"
+                  activeOpacity={0.85}
                 >
                   <Text style={styles.openButtonText}>
-                    {isClaiming ? 'Claiming...' : '開'}
+                    {isClaiming ? '...' : '開'}
                   </Text>
                 </TouchableOpacity>
                 <Text style={styles.openHint}>Tap to claim tokens on-chain</Text>
@@ -80,138 +85,126 @@ export const ClaimResultModal: React.FC<ClaimResultModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   container: {
-    width: 290,
-    backgroundColor: colors.redPacketBg,
-    borderRadius: 16,
+    width: 300,
+    backgroundColor: '#FA4E38',
+    borderRadius: radii.xl,
     overflow: 'hidden',
     alignItems: 'center',
-    ...Platform.select({
-      web: { boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.3)' } as any,
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 10,
-      },
-    }),
+    ...shadows.modal,
   },
   topCurvedHeader: {
     width: '100%',
-    height: 100,
-    backgroundColor: colors.redPacketDark,
+    height: 104,
+    backgroundColor: '#D33620',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    borderBottomLeftRadius: 145,
-    borderBottomRightRadius: 145,
+    borderBottomLeftRadius: 150,
+    borderBottomRightRadius: 150,
   },
   closeBtn: {
     position: 'absolute',
-    top: 12,
+    top: 14,
     right: 14,
-  },
-  closeBtnText: {
-    fontSize: 18,
-    color: 'rgba(255,255,255,0.7)',
+    padding: 4,
   },
   avatarCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.surface,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FDE49E',
+    borderWidth: 2,
+    borderColor: '#F5CD6D',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'absolute',
-    bottom: -25,
-    ...Platform.select({
-      web: { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.15)' } as any,
-      default: {
-        shadowColor: '#000',
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 3,
-      },
-    }),
-  },
-  avatarEmoji: {
-    fontSize: 26,
+    bottom: -26,
+    ...shadows.card,
   },
   body: {
-    paddingTop: 36,
+    paddingTop: 38,
     paddingBottom: 32,
     paddingHorizontal: 20,
     alignItems: 'center',
     width: '100%',
   },
   wishText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
-    color: colors.redPacketGold,
+    color: '#FDE49E',
     textAlign: 'center',
     marginBottom: 4,
+    letterSpacing: -0.1,
   },
   typeText: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255, 255, 255, 0.85)',
     marginBottom: 20,
+    fontWeight: '500',
   },
   actionContainer: {
     alignItems: 'center',
   },
   openButton: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: colors.redPacketGold,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#FDE49E',
+    borderWidth: 2,
+    borderColor: '#F5CD6D',
     justifyContent: 'center',
     alignItems: 'center',
-    ...Platform.select({
-      web: { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.25)' } as any,
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
-      },
-    }),
+    ...shadows.floating,
   },
   openButtonDisabled: {
     opacity: 0.7,
   },
   openButtonText: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
-    color: colors.redPacketDark,
+    color: '#D44A26',
   },
   openHint: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 12,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.75)',
+    marginTop: 14,
+    fontWeight: '500',
   },
   amountContainer: {
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 8,
   },
   amountNumber: {
-    fontSize: 36,
+    fontSize: 38,
     fontWeight: '800',
-    color: colors.redPacketGold,
+    color: '#FDE49E',
+    letterSpacing: -0.5,
   },
   amountUnit: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '600',
     marginTop: 2,
   },
+  badgeSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radii.full,
+    marginTop: 14,
+    gap: 5,
+  },
   successNote: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 10,
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '500',
+    marginLeft: 4,
   },
 });

@@ -26,3 +26,4 @@
 | [TASK-014](tasks/TASK-014.md) | Local Joint E2E Testing & Verification Suite | DONE | TASK-001 ~ TASK-013 | 全链路联合集成测试与综合验证交付报告 |
 | [TASK-015](tasks/TASK-015.md) | Comprehensive Security & Performance Hardening & Audit | DONE | TASK-001 ~ TASK-014 | 全面安全审计与加固、存储与渲染性能优化、回归测试与审计报告 |
 | [TASK-016](tasks/TASK-016.md) | Local Visual E2E & Mobile Emulation Screenshot Suite | DONE | TASK-001 ~ TASK-015 | 本地无头 Chrome 移动端视口模拟、全场景高保真界面走查与截图套件 |
+| [TASK-017](tasks/TASK-017.md) | Modern Web3 & WeChat Design System UI/UX Polish | DONE | TASK-001 ~ TASK-016 | 全面现代 Web3 + 微信原生视觉规范与 UI/UX 美化重构，矢量图标系统集成与全场景质感升级 |

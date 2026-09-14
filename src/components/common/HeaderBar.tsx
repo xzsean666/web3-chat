@@ -1,6 +1,14 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { colors } from '../../theme/colors';
+import { Icon } from './Icon';
 
 export interface HeaderBarProps {
   title: string;
@@ -23,19 +31,59 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   rightActions,
   style,
 }) => {
+  const renderLeftContent = () => {
+    if (!leftAction) return null;
+    const label = leftAction.label || '‹ Back';
+    const isBackLike = label.includes('Back') || label.startsWith('‹') || label.startsWith('<');
+
+    return (
+      <TouchableOpacity
+        style={styles.leftButton}
+        onPress={leftAction.onPress}
+        testID="header-left-action"
+        activeOpacity={0.7}
+      >
+        {isBackLike ? (
+          <View style={styles.backRow}>
+            <Icon name="chevron-left" size={22} color={colors.textPrimary} strokeWidth={2.4} />
+            <Text style={styles.actionText}>Back</Text>
+          </View>
+        ) : (
+          <Text style={styles.actionText}>{label}</Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderRightAction = (
+    action: { label: string; onPress: () => void },
+    index: number
+  ) => {
+    const isPlus = action.label === '+' || action.label === '＋';
+    const isMore = action.label === '...' || action.label === '•••';
+
+    return (
+      <TouchableOpacity
+        key={index}
+        style={[styles.rightButton, (isPlus || isMore) && styles.iconActionButton]}
+        onPress={action.onPress}
+        testID={`header-right-action-${index}`}
+        activeOpacity={0.7}
+      >
+        {isPlus ? (
+          <Icon name="plus" size={20} color={colors.textPrimary} strokeWidth={2.2} />
+        ) : isMore ? (
+          <Icon name="more" size={20} color={colors.textPrimary} strokeWidth={2.2} />
+        ) : (
+          <Text style={styles.actionText}>{action.label}</Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={[styles.container, style]} testID="header-bar">
-      <View style={styles.leftContainer}>
-        {leftAction && (
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={leftAction.onPress}
-            testID="header-left-action"
-          >
-            <Text style={styles.actionText}>{leftAction.label || '‹ Back'}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <View style={styles.leftContainer}>{renderLeftContent()}</View>
 
       <View style={styles.titleContainer}>
         <Text style={styles.titleText} numberOfLines={1} testID="header-title">
@@ -49,16 +97,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
       </View>
 
       <View style={styles.rightContainer}>
-        {rightActions?.map((action, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.actionButton}
-            onPress={action.onPress}
-            testID={`header-right-action-${index}`}
-          >
-            <Text style={styles.actionText}>{action.label}</Text>
-          </TouchableOpacity>
-        ))}
+        {rightActions?.map((action, index) => renderRightAction(action, index))}
       </View>
     </View>
   );
@@ -66,17 +105,25 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    height: 48,
-    backgroundColor: colors.backgroundLight,
+    height: 50,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
   },
   leftContainer: {
-    minWidth: 60,
+    minWidth: 70,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  leftButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  backRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -89,6 +136,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: colors.textPrimary,
+    letterSpacing: -0.2,
   },
   subtitleText: {
     fontSize: 11,
@@ -96,14 +144,23 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   rightContainer: {
-    minWidth: 60,
+    minWidth: 70,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  actionButton: {
+  rightButton: {
     paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
+  },
+  iconActionButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.surfaceSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
   },
   actionText: {
     fontSize: 15,

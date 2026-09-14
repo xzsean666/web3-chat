@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '../..');
 const distDir = path.join(rootDir, 'dist');
 const screenshotsDir = path.join(__dirname, 'screenshots');
-const artifactDir = '/root/.local/share/ai/agy/agyg/.gemini/antigravity-cli/brain/6e3466bd-7a69-4cd0-8b49-c6e954cb8ed9';
+const artifactDir = process.env.ARTIFACT_DIR || '/root/.local/share/ai/agy/agyg/.gemini/antigravity-cli/brain/0325d17f-ece8-4d65-91f4-0fa2ea551c05';
 
 if (!fs.existsSync(screenshotsDir)) {
   fs.mkdirSync(screenshotsDir, { recursive: true });

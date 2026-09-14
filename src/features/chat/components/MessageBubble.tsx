@@ -1,6 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, type StyleProp, type ViewStyle } from 'react-native';
 import { colors } from '../../../theme/colors';
+import { Icon } from '../../../components/common/Icon';
+import { shadows, radii } from '../../../theme/design';
+import { RedPacketCard } from '../../packet/components/RedPacketCard';
 import type { ChatMessage } from '../../../types';
 
 export interface MessageBubbleProps {
@@ -58,6 +61,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   };
 
   const isPacket = message.type === 'packet';
+  const isBurn = message.retention === 'on_read';
 
   return (
     <View
@@ -68,39 +72,35 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       ]}
       testID="message-bubble-row"
     >
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onLongPress={() => onLongPress?.(message)}
-        onPress={() => {
-          if (isPacket && onPressPacket) {
-            onPressPacket(message.metadata?.packet || null);
-          }
-        }}
-        style={[
-          styles.bubble,
-          isSelf ? styles.bubbleSelf : styles.bubbleOther,
-          isPacket && styles.bubblePacket,
-        ]}
-        testID="message-bubble"
-      >
-        {isPacket ? (
-          <View style={styles.packetCard}>
-            <View style={styles.packetHeader}>
-              <Text style={styles.packetIcon}>🧧</Text>
-              <View style={styles.packetInfo}>
-                <Text style={styles.packetWishText} numberOfLines={1}>
-                  {message.metadata?.packet?.wishText || message.content || 'Lucky Red Packet'}
-                </Text>
-                <Text style={styles.packetTokenText}>
-                  {message.metadata?.packet?.tokenSymbol || 'tBNB'} Red Packet
-                </Text>
-              </View>
+      {isPacket ? (
+        <RedPacketCard
+          payload={message.metadata?.packet || {
+            packetId: '0xpacket',
+            chainId: 97,
+            tokenSymbol: 'LUCKY',
+            totalAmount: '10',
+            recipientCount: 1,
+            wishText: message.content,
+          }}
+          onPress={() => onPressPacket?.(message.metadata?.packet)}
+        />
+      ) : (
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onLongPress={() => onLongPress?.(message)}
+          style={[
+            styles.bubble,
+            isSelf ? styles.bubbleSelf : styles.bubbleOther,
+          ]}
+          testID="message-bubble"
+        >
+          {isBurn && (
+            <View style={styles.burnHeader}>
+              <Icon name="flame" size={14} color="#EF4444" strokeWidth={2.4} />
+              <Text style={styles.burnHeaderText}>Burn on read</Text>
             </View>
-            <View style={styles.packetFooter}>
-              <Text style={styles.packetFooterText}>LuckyDrop Web3</Text>
-            </View>
-          </View>
-        ) : (
+          )}
+
           <Text
             style={[
               styles.messageText,
@@ -109,13 +109,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           >
             {message.content}
           </Text>
-        )}
 
-        <View style={styles.metaRow}>
-          <Text style={styles.timeText}>{formatTime(message.created_at)}</Text>
-          {renderStatus()}
-        </View>
-      </TouchableOpacity>
+          <View style={styles.metaRow}>
+            <Text style={[styles.timeText, isSelf && styles.timeTextSelf]}>
+              {formatTime(message.created_at)}
+            </Text>
+            {renderStatus()}
+          </View>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -125,7 +127,7 @@ export const MemoMessageBubble = React.memo(MessageBubble);
 const styles = StyleSheet.create({
   rowContainer: {
     marginVertical: 4,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     flexDirection: 'row',
   },
   rowSelf: {
@@ -135,37 +137,44 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   bubble: {
-    maxWidth: '75%',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 6,
+    maxWidth: '78%',
+    borderRadius: radii.md,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 8,
+    ...shadows.subtle,
   },
   bubbleSelf: {
-    backgroundColor: colors.bubbleSelf,
+    backgroundColor: '#95EC69',
+    borderTopRightRadius: 4,
   },
   bubbleOther: {
-    backgroundColor: colors.bubbleOther,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 4,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
-  bubblePacket: {
-    backgroundColor: colors.redPacketBg,
-    paddingHorizontal: 0,
-    paddingTop: 0,
-    borderRadius: 10,
-    minWidth: 220,
-    overflow: 'hidden',
+  burnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    gap: 4,
+  },
+  burnHeaderText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#EF4444',
+    marginLeft: 3,
   },
   messageText: {
     fontSize: 16,
     lineHeight: 22,
   },
   messageTextSelf: {
-    color: colors.textPrimary,
+    color: '#0F172A',
   },
   messageTextOther: {
-    color: colors.textPrimary,
+    color: '#0F172A',
   },
   metaRow: {
     flexDirection: 'row',
@@ -175,8 +184,11 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 10,
-    color: colors.textTertiary,
+    color: '#94A3B8',
     marginRight: 4,
+  },
+  timeTextSelf: {
+    color: 'rgba(15, 23, 42, 0.55)',
   },
   statusPending: {
     fontSize: 10,
@@ -197,48 +209,15 @@ const styles = StyleSheet.create({
   },
   recalledContainer: {
     alignItems: 'center',
-    marginVertical: 8,
+    marginVertical: 10,
   },
   recalledText: {
     fontSize: 12,
-    color: colors.textTertiary,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  packetCard: {
-    width: '100%',
-  },
-  packetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-  },
-  packetIcon: {
-    fontSize: 34,
-    marginRight: 10,
-  },
-  packetInfo: {
-    flex: 1,
-  },
-  packetWishText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.redPacketGold,
-  },
-  packetTokenText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
-  },
-  packetFooter: {
-    backgroundColor: colors.redPacketDark,
+    color: '#64748B',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
     paddingHorizontal: 12,
     paddingVertical: 4,
-  },
-  packetFooterText: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.6)',
+    borderRadius: radii.full,
+    fontWeight: '500',
   },
 });

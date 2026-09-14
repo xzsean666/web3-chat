@@ -7,6 +7,8 @@ import {
   StyleSheet,
 } from 'react-native';
 import { colors } from '../../../theme/colors';
+import { Icon } from '../../../components/common/Icon';
+import { radii, shadows } from '../../../theme/design';
 import { SUPPORTED_CHAINS } from '../../../constants/chains';
 import type { ChainConfig } from '../../../types';
 
@@ -25,14 +27,38 @@ export const ChainSwitchModal: React.FC<ChainSwitchModalProps> = ({
 }) => {
   const chainList = Object.values(SUPPORTED_CHAINS);
 
+  const renderChainIcon = (chainId: number) => {
+    if (chainId === 97 || chainId === 56) {
+      return (
+        <View style={[styles.chainIconBadge, { backgroundColor: '#F3BA2F' }]}>
+          <Text style={styles.chainBadgeText}>BNB</Text>
+        </View>
+      );
+    }
+    if (chainId === 1 || chainId === 11155111) {
+      return (
+        <View style={[styles.chainIconBadge, { backgroundColor: '#627EEA' }]}>
+          <Text style={styles.chainBadgeText}>ETH</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={[styles.chainIconBadge, { backgroundColor: '#475569' }]}>
+        <Icon name="layers" size={16} color="#FFFFFF" strokeWidth={2.4} />
+      </View>
+    );
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay} testID="chain-switch-modal">
         <View style={styles.container}>
+          <View style={styles.handleBar} />
+
           <View style={styles.header}>
             <Text style={styles.title}>Select Network</Text>
-            <TouchableOpacity onPress={onClose} testID="btn-close-chain-modal">
-              <Text style={styles.closeText}>✕</Text>
+            <TouchableOpacity onPress={onClose} testID="btn-close-chain-modal" style={styles.closeBtn}>
+              <Icon name="close" size={20} color="#64748B" />
             </TouchableOpacity>
           </View>
 
@@ -48,11 +74,10 @@ export const ChainSwitchModal: React.FC<ChainSwitchModalProps> = ({
                     onClose();
                   }}
                   testID={`chain-option-${chain.chainId}`}
+                  activeOpacity={0.7}
                 >
                   <View style={styles.chainIconContainer}>
-                    <Text style={styles.chainIcon}>
-                      {chain.chainId === 97 ? '🟡' : chain.chainId === 31337 ? '⚙️' : '🔷'}
-                    </Text>
+                    {renderChainIcon(chain.chainId)}
                   </View>
 
                   <View style={styles.chainInfo}>
@@ -60,7 +85,7 @@ export const ChainSwitchModal: React.FC<ChainSwitchModalProps> = ({
                       {chain.name}
                     </Text>
                     <Text style={styles.chainCurrency}>
-                      Native: {chain.nativeCurrency.symbol} (Chain ID: {chain.chainId})
+                      Native: {chain.nativeCurrency.symbol} • Chain ID: {chain.chainId}
                     </Text>
                   </View>
 
@@ -80,53 +105,72 @@ export const ChainSwitchModal: React.FC<ChainSwitchModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 20,
+    paddingTop: 12,
     paddingBottom: 36,
+    ...shadows.modal,
+  },
+  handleBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.textPrimary,
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
-  closeText: {
-    fontSize: 18,
-    color: colors.textSecondary,
+  closeBtn: {
+    padding: 4,
   },
   chainList: {
-    marginTop: 4,
+    gap: 8,
   },
   chainItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    backgroundColor: colors.backgroundLight,
+    paddingHorizontal: 16,
+    borderRadius: radii.lg,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
   },
   chainItemActive: {
-    backgroundColor: '#EBF8F0',
-    borderWidth: 1,
+    backgroundColor: '#F0FDF4',
     borderColor: colors.primary,
   },
   chainIconContainer: {
-    marginRight: 12,
+    marginRight: 14,
   },
-  chainIcon: {
-    fontSize: 24,
+  chainIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chainBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
   },
   chainInfo: {
     flex: 1,
@@ -134,14 +178,14 @@ const styles = StyleSheet.create({
   chainName: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: '#0F172A',
   },
   chainNameActive: {
     color: colors.primaryDark,
   },
   chainCurrency: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: '#64748B',
     marginTop: 2,
   },
   checkMark: {

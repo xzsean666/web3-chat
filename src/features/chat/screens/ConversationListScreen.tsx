@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { colors } from '../../../theme/colors';
 import { Badge } from '../../../components/common/Badge';
+import { Icon } from '../../../components/common/Icon';
 import type { Conversation } from '../../../types';
 
 export interface ConversationListScreenProps {
@@ -46,17 +47,22 @@ export const ConversationListScreen: React.FC<ConversationListScreenProps> = ({
 
   const renderItem = ({ item }: { item: Conversation }) => {
     const isGroup = item.type === 'group';
-    const avatarEmoji = isGroup ? '👥' : '👤';
 
     return (
       <TouchableOpacity
         style={styles.convItem}
         onPress={() => onSelectConversation(item)}
         testID={`conv-item-${item.id}`}
+        activeOpacity={0.7}
       >
         <View style={styles.avatarContainer}>
           <View style={[styles.avatar, isGroup ? styles.avatarGroup : styles.avatarDm]}>
-            <Text style={styles.avatarEmoji}>{avatarEmoji}</Text>
+            <Icon
+              name={isGroup ? 'contacts' : 'me'}
+              size={24}
+              color={isGroup ? '#B45309' : '#0284C7'}
+              strokeWidth={2}
+            />
           </View>
           {item.unread_count > 0 && (
             <Badge count={item.unread_count} style={styles.unreadBadge} />
@@ -99,7 +105,9 @@ export const ConversationListScreen: React.FC<ConversationListScreenProps> = ({
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer} testID="conv-list-empty">
-            <Text style={styles.emptyIcon}>💬</Text>
+            <View style={styles.emptyIconCircle}>
+              <Icon name="chat" size={36} color={colors.primary} strokeWidth={2} />
+            </View>
             <Text style={styles.emptyTitle}>No Conversations</Text>
             <Text style={styles.emptySubtitle}>
               Add friends or join groups to start chatting on Web3
@@ -114,41 +122,40 @@ export const ConversationListScreen: React.FC<ConversationListScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
   },
   convItem: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
   },
   avatarContainer: {
-    width: 48,
-    height: 48,
+    width: 50,
+    height: 50,
     position: 'relative',
-    marginRight: 12,
+    marginRight: 14,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 6,
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarDm: {
-    backgroundColor: '#E6F0FF',
+    backgroundColor: '#E0F2FE',
   },
   avatarGroup: {
-    backgroundColor: '#FFF2E6',
-  },
-  avatarEmoji: {
-    fontSize: 24,
+    backgroundColor: '#FEF3C7',
   },
   unreadBadge: {
     position: 'absolute',
     top: -4,
     right: -4,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   contentContainer: {
     flex: 1,
@@ -158,47 +165,55 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 5,
   },
   titleText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: '#0F172A',
     flex: 1,
     marginRight: 8,
+    letterSpacing: -0.2,
   },
   timeText: {
     fontSize: 12,
-    color: colors.textTertiary,
+    color: '#94A3B8',
+    fontWeight: '500',
   },
   lastMessageText: {
-    fontSize: 13,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 18,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderLight,
-    marginLeft: 76,
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    marginLeft: 78,
   },
   emptyContainer: {
     paddingTop: 80,
     alignItems: 'center',
     paddingHorizontal: 32,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 12,
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.primarySubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: '#0F172A',
     marginBottom: 6,
   },
   emptySubtitle: {
-    fontSize: 13,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#64748B',
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 20,
   },
 });

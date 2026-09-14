@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors } from '../../../theme/colors';
+import { Icon } from '../../../components/common/Icon';
+import { shadows, radii } from '../../../theme/design';
 import type { PacketMessagePayload } from '../../../types';
 
 export interface RedPacketCardProps {
@@ -19,7 +21,7 @@ export const RedPacketCard: React.FC<RedPacketCardProps> = ({
   const getSubStatus = () => {
     if (isExpired) return 'Expired';
     if (isClaimed) return 'Red packet claimed';
-    return `${payload.tokenSymbol} Red Packet`;
+    return `${payload.tokenSymbol} LuckyDrop Red Packet`;
   };
 
   return (
@@ -31,18 +33,24 @@ export const RedPacketCard: React.FC<RedPacketCardProps> = ({
     >
       <View style={styles.contentRow}>
         <View style={styles.iconContainer}>
-          <Text style={styles.iconEmoji}>🧧</Text>
+          <View style={styles.goldEmblem}>
+            <Icon name="gift" size={20} color="#D44A26" strokeWidth={2.4} />
+          </View>
         </View>
         <View style={styles.textContainer}>
           <Text style={styles.wishText} numberOfLines={1}>
-            {payload.wishText || 'Best Wishes & Good Luck!'}
+            {payload.wishText || '恭喜发财 大吉大利 🧧'}
           </Text>
           <Text style={styles.subText}>{getSubStatus()}</Text>
         </View>
       </View>
 
       <View style={styles.footerRow}>
-        <Text style={styles.footerText}>LuckyDrop Web3</Text>
+        <View style={styles.footerLeft}>
+          <Icon name="sparkles" size={11} color="rgba(255,255,255,0.7)" strokeWidth={2} />
+          <Text style={styles.footerText}>LuckyDrop Web3</Text>
+        </View>
+        <Icon name="chevron-right" size={12} color="rgba(255,255,255,0.6)" />
       </View>
     </TouchableOpacity>
   );
@@ -50,20 +58,11 @@ export const RedPacketCard: React.FC<RedPacketCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.redPacketBg,
-    borderRadius: 10,
-    width: 230,
+    backgroundColor: '#FA4E38',
+    borderRadius: radii.md,
+    width: 240,
     overflow: 'hidden',
-    ...Platform.select({
-      web: { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.15)' } as any,
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 3,
-      },
-    }),
+    ...shadows.card,
   },
   cardInactive: {
     opacity: 0.65,
@@ -71,13 +70,21 @@ const styles = StyleSheet.create({
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   iconContainer: {
-    marginRight: 10,
+    marginRight: 12,
   },
-  iconEmoji: {
-    fontSize: 34,
+  goldEmblem: {
+    width: 42,
+    height: 42,
+    borderRadius: radii.sm,
+    backgroundColor: '#FDE49E',
+    borderWidth: 1.5,
+    borderColor: '#F5CD6D',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textContainer: {
     flex: 1,
@@ -85,21 +92,32 @@ const styles = StyleSheet.create({
   wishText: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.redPacketGold,
-    marginBottom: 3,
+    color: '#FDE49E',
+    marginBottom: 4,
+    letterSpacing: -0.1,
   },
   subText: {
     fontSize: 12,
-    color: colors.textInverse,
-    opacity: 0.9,
+    color: '#FFFFFF',
+    opacity: 0.92,
   },
   footerRow: {
-    backgroundColor: colors.redPacketDark,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    backgroundColor: '#D33620',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  footerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   footerText: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: '500',
+    marginLeft: 4,
   },
 });

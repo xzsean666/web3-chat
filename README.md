@@ -4,10 +4,11 @@
 [![React Native](https://img.shields.io/badge/React%20Native-0.76.6-61DAFB.svg)](https://reactnative.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6.svg)](https://www.typescriptlang.org)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-green.svg)](https://nodejs.org)
+[![Design System](https://img.shields.io/badge/Design%20System-Lucide%20%2B%20Squircle-07C160.svg)]()
 [![Tests](https://img.shields.io/badge/Unit%20Tests-107%20Passed-brightgreen.svg)]()
 [![Joint E2E](https://img.shields.io/badge/Anvil%20Joint%20E2E-15%2F15%20Passed-brightgreen.svg)]()
 
-> 一款基于 **React Native + Expo (TypeScript)** 构建的移动端 Web3 社交应用，复刻微信经典绿色调 (`#07C160`) 4-Tab 交互体验，结合 Local-First 离线优先架构与非对称加密安全密钥管理，原生对接 BNB Smart Chain (BSC) 及周边 Web3 基础设施。
+> 一款基于 **React Native + Expo (TypeScript)** 构建的移动端 Web3 社交应用，复刻微信经典绿色调 (`#07C160`) 4-Tab 交互体验，全面融入现代 Web3 矢量设计系统 (Lucide Icons + Squircle 超椭圆微阴影体系)，结合 Local-First 离线优先架构与非对称加密安全密钥管理，原生对接 BNB Smart Chain (BSC) 及周边 Web3 基础设施。
 
 ---
 
@@ -19,8 +20,8 @@
 
 | 💬 会话列表 (Chats) | 💬 聊天流 & 红包 (Chat Detail) | 🧧 LuckyDrop 拆红包 (Claim Modal) |
 |:---:|:---:|:---:|
-| <img src="test/visual/screenshots/01_chats_list.png" width="250" alt="会话列表" /> | <img src="test/visual/screenshots/02_chat_detail.png" width="250" alt="聊天详情" /> | <img src="test/visual/screenshots/03_red_packet_modal.png" width="250" alt="拆红包弹窗" /> |
-| **置顶与未读红点**<br/>相对时间格式化、单聊/群聊头像 | **双方气泡与阅后即焚**<br/>微信绿我方气泡、30s 即焚倒计时、红包卡片 | **拟物化弧顶设计**<br/>常数级 Gas Merkle 证明链上领取 |
+| <img src="./test/visual/screenshots/01_chats_list.png" width="250" alt="会话列表" /> | <img src="./test/visual/screenshots/02_chat_detail.png" width="250" alt="聊天详情" /> | <img src="./test/visual/screenshots/03_red_packet_modal.png" width="250" alt="拆红包弹窗" /> |
+| **现代矢量图标与 Squircle 头像**<br/>Lucide 矢量搜索与加号、精细化平滑微阴影、置顶与单/群聊角标 | **现代双向气泡与金箔红包卡**<br/>Lucide 快捷发送面板、🔥 30s 销毁倒计时、LuckyDrop 专属烫金卡片 | **毛玻璃悬浮拆红包模态框**<br/>高饱和金币微质感徽章、渐变 Claim 交互、常数级 Gas Merkle 证明 |
 
 ---
 
@@ -28,8 +29,8 @@
 
 | 👥 通讯录分组 (Contacts) | ➕ 添加朋友 (Add Friend) | 🧭 发现页面 (Discover) |
 |:---:|:---:|:---:|
-| <img src="test/visual/screenshots/04_contacts_list.png" width="250" alt="通讯录" /> | <img src="test/visual/screenshots/05_add_friend.png" width="250" alt="添加朋友" /> | <img src="test/visual/screenshots/06_discover.png" width="250" alt="发现页面" /> |
-| **A-Z 首字母吸顶索引**<br/>新的朋友与群聊快捷入口、ENS 备注 | **EVM 地址强校验**<br/>支持 0x 钱包地址与链上好友申请 | **Web3 生态快捷入口**<br/>LuckyDrop、PancakeSwap、BscScan |
+| <img src="./test/visual/screenshots/04_contacts_list.png" width="250" alt="通讯录" /> | <img src="./test/visual/screenshots/05_add_friend.png" width="250" alt="添加朋友" /> | <img src="./test/visual/screenshots/06_discover.png" width="250" alt="发现页面" /> |
+| **A-Z 索引与矢量生态入口**<br/>Lucide 柔和彩色圆角功能入口、Squircle 好友头像、ENS 备注 | **快捷扫码与地址校验面板**<br/>内置快速粘贴与扫码入口、EVM 0x 格式智能感知与校验提示 | **精选 DApp 现代磁贴矩阵**<br/>Lucide 矢量外链与徽标、分类标签、LuckyDrop & DEX 生态直达 |
 
 ---
 
@@ -37,19 +38,19 @@
 
 | 🛡️ 签名授权抽屉 (Sign Sheet) | 👤 个人中心与多链资产 (Me) | 🌐 切换网络面板 (Chain Switch) |
 |:---:|:---:|:---:|
-| <img src="test/visual/screenshots/07_sign_approval_sheet.png" width="250" alt="签名授权抽屉" /> | <img src="test/visual/screenshots/08_me_assets.png" width="250" alt="个人资产" /> | <img src="test/visual/screenshots/09_chain_switch_modal.png" width="250" alt="切换网络" /> |
-| **防钓鱼半屏抽屉**<br/>`personal_sign` 结构化报文预览与警示 | **Multicall3 资产看板**<br/>BNB/USDT/LUCKY 批量解析与 USD 估值 | **极速平滑切链**<br/>BSC Testnet (Chain 97)、Sepolia 等 |
+| <img src="./test/visual/screenshots/07_sign_approval_sheet.png" width="250" alt="签名授权抽屉" /> | <img src="./test/visual/screenshots/08_me_assets.png" width="250" alt="个人资产" /> | <img src="./test/visual/screenshots/09_chain_switch_modal.png" width="250" alt="切换网络" /> |
+| **安全加固防钓鱼签名抽屉**<br/>高危安全警示、等宽十六进制报文预览盒与一键复制、二次授权确认 | **Web3 渐变卡片与多链资产**<br/>深绿渐变钱包卡片、快捷操作矩阵 (转账/收款/扫码/发红包)、Multicall3 资产看板 | **现代网络选择器与活跃状态**<br/>Lucide 动态网络节点指示、绿色激活勾选徽章、主备 RPC 实时状态 |
 
 ---
 
-## ✨ 核心核心功能矩阵
+## ✨ 核心功能矩阵
 
-### 1. 微信级 4-Tab 核心体验
-- **微信经典绿色调 (`#07C160`)**: 统领 Navigation Bar、Tab Icon、未读 Badge 与操作按钮。
+### 1. 微信级 4-Tab 核心体验与现代化设计
+- **经典绿色调与现代设计规范**: 以微信经典绿 (`#07C160`) 统领全局，深度融入 Lucide 矢量图标库、平滑超椭圆圆角 (Squircle)、高保真毛玻璃悬浮抽屉与微阴影卡片体系，告别生硬字符与粗糙线框。
 - **Chats (聊天)**: 会话列表下拉刷新、会话置顶、未读红点计数、单聊与群聊会话区分。
 - **Contacts (通讯录)**: A-Z 拼音/英文字母分组排序、右侧首字母快速吸顶索引、新的朋友与群聊快捷入口。
 - **Discover (发现)**: 内置 Web3 DApp 离线主页，涵盖 LuckyDrop Protocol、PancakeSwap、BscScan、BNB 官方水龙头。
-- **Me (我)**: 钱包账户卡片、截短地址一键复制、多链资产总览与网络切换抽屉。
+- **Me (我)**: 钱包账户渐变卡片、截短地址一键复制、多链资产总览与网络切换抽屉。
 
 ### 2. Local-First 离线优先消息系统
 - **状态流转闭环**: 严格走通 `pending` (离线暂存) ➔ `sent` (已投递) ➔ `delivered` (已送达) ➔ `read` (已读)。
@@ -164,7 +165,7 @@ web3-chat/
 ├── app.json                              # Expo 52 工程配置文件
 ├── package.json                          # 依赖与 scripts 配置
 ├── src/
-│   ├── components/common/                # 微信风格通用组件 (HeaderBar, Badge)
+│   ├── components/common/                # 微信风格通用组件 (HeaderBar, Badge, Icon 统一矢量桥)
 │   ├── constants/                        # 链配置 (SUPPORTED_CHAINS)
 │   ├── features/                         # 业务核心功能模块
 │   │   ├── assets/                       # “我”页面与 Multicall3 资产全景服务
@@ -178,7 +179,7 @@ web3-chat/
 │   │   ├── storage/                      # 离线优先持久化存储引擎 (会话/消息/游标)
 │   │   ├── wallet/                       # KeyStore 本地安全密钥管理与钱包核心
 │   │   └── worker/                       # Worker 客户端与 EIP-191 SIWE 认证
-│   ├── theme/                            # 经典微信视觉主题规范 (colors)
+│   ├── theme/                            # 经典微信视觉主题与现代设计规范 (colors, design)
 │   ├── types/                            # 领域模型与 TypeScript 定义
 │   └── visual/                           # 视觉测试与真机环境演示容器 (VisualHarness)
 ├── test/                                 # 测试套件

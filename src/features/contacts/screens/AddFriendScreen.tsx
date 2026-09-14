@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { colors } from '../../../theme/colors';
 import { HeaderBar } from '../../../components/common/HeaderBar';
+import { Icon } from '../../../components/common/Icon';
+import { radii, shadows } from '../../../theme/design';
 
 export interface AddFriendScreenProps {
   onBack: () => void;
@@ -42,6 +44,8 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
     }
   };
 
+  const isValid = address.trim().length > 0 && !submitting;
+
   return (
     <SafeAreaView style={styles.safeArea} testID="add-friend-screen">
       <HeaderBar
@@ -53,36 +57,43 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
       />
 
       <View style={styles.container}>
-        <Text style={styles.label}>Wallet Address</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="0x... EVM address"
-          placeholderTextColor={colors.textTertiary}
-          value={address}
-          onChangeText={setAddress}
-          autoCapitalize="none"
-          autoCorrect={false}
-          testID="input-friend-address"
-        />
+        <View style={styles.card}>
+          <Text style={styles.label}>Wallet Address</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="0x... EVM address"
+              placeholderTextColor="#94A3B8"
+              value={address}
+              onChangeText={setAddress}
+              autoCapitalize="none"
+              autoCorrect={false}
+              testID="input-friend-address"
+            />
+          </View>
 
-        <Text style={styles.label}>Alias / Note (Optional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Alice"
-          placeholderTextColor={colors.textTertiary}
-          value={alias}
-          onChangeText={setAlias}
-          testID="input-friend-alias"
-        />
+          <Text style={styles.label}>Alias / Note (Optional)</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Alice"
+              placeholderTextColor="#94A3B8"
+              value={alias}
+              onChangeText={setAlias}
+              testID="input-friend-alias"
+            />
+          </View>
+        </View>
 
         <TouchableOpacity
-          style={[styles.submitButton, (!address.trim() || submitting) && styles.submitButtonDisabled]}
+          style={[styles.submitButton, !isValid && styles.submitButtonDisabled]}
           onPress={handleSubmit}
-          disabled={!address.trim() || submitting}
+          disabled={!isValid}
           testID="btn-submit-add-friend"
+          activeOpacity={0.8}
         >
-          <Text style={styles.submitButtonText}>
-            {submitting ? 'Sending...' : 'Send Friend Request'}
+          <Text style={[styles.submitButtonText, !isValid && styles.submitButtonTextDisabled]}>
+            {submitting ? 'Sending Request...' : 'Send Friend Request'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -93,41 +104,57 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: '#F8FAFC',
   },
   container: {
     padding: 20,
   },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.lg,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    ...shadows.card,
+  },
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: '#475569',
     marginBottom: 8,
     marginTop: 12,
   },
+  inputContainer: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
+    overflow: 'hidden',
+  },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     fontSize: 15,
-    color: colors.textPrimary,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    color: '#0F172A',
   },
   submitButton: {
     backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
+    borderRadius: radii.md,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 30,
+    marginTop: 28,
+    ...shadows.subtle,
   },
   submitButtonDisabled: {
-    backgroundColor: colors.border,
+    backgroundColor: '#E2E8F0',
+    elevation: 0,
   },
   submitButtonText: {
-    color: colors.textInverse,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  submitButtonTextDisabled: {
+    color: '#94A3B8',
   },
 });

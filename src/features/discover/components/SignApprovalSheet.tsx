@@ -8,6 +8,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { colors } from '../../../theme/colors';
+import { Icon } from '../../../components/common/Icon';
+import { radii, shadows } from '../../../theme/design';
 
 export interface SignApprovalSheetProps {
   visible: boolean;
@@ -45,7 +47,17 @@ export const SignApprovalSheet: React.FC<SignApprovalSheetProps> = ({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onReject}>
       <View style={styles.overlay} testID="sign-approval-sheet">
         <View style={styles.container}>
+          <View style={styles.handleBar} />
+
           <View style={styles.header}>
+            <View style={styles.shieldIconContainer}>
+              <Icon
+                name={isTransaction ? 'shield-alert' : 'shield-check'}
+                size={28}
+                color={isTransaction ? '#F59E0B' : colors.primary}
+                strokeWidth={2.2}
+              />
+            </View>
             <Text style={styles.title}>{title}</Text>
             {origin && <Text style={styles.originText}>{origin}</Text>}
           </View>
@@ -64,6 +76,7 @@ export const SignApprovalSheet: React.FC<SignApprovalSheetProps> = ({
               style={styles.rejectButton}
               onPress={onReject}
               testID="btn-reject-approval"
+              activeOpacity={0.8}
             >
               <Text style={styles.rejectButtonText}>Reject</Text>
             </TouchableOpacity>
@@ -72,6 +85,7 @@ export const SignApprovalSheet: React.FC<SignApprovalSheetProps> = ({
               style={styles.approveButton}
               onPress={onApprove}
               testID="btn-approve-approval"
+              activeOpacity={0.8}
             >
               <Text style={styles.approveButtonText}>Approve</Text>
             </TouchableOpacity>
@@ -85,90 +99,114 @@ export const SignApprovalSheet: React.FC<SignApprovalSheetProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
-    maxHeight: '80%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+    paddingTop: 10,
+    maxHeight: '82%',
+    ...shadows.modal,
+  },
+  handleBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
+  },
+  shieldIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.textPrimary,
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
   originText: {
     fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 2,
+    color: '#64748B',
+    marginTop: 4,
+    fontWeight: '500',
   },
   methodBadge: {
     alignSelf: 'center',
-    backgroundColor: colors.backgroundLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radii.sm,
     marginBottom: 16,
   },
   methodText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.primaryDark,
+    color: '#0284C7',
     fontFamily: 'monospace',
   },
   sectionLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: 6,
+    color: '#475569',
+    marginBottom: 8,
   },
   payloadScroll: {
     maxHeight: 180,
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 8,
-    padding: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: radii.md,
+    padding: 12,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   payloadText: {
     fontSize: 12,
     fontFamily: 'monospace',
-    color: colors.textPrimary,
+    color: '#334155',
+    lineHeight: 18,
   },
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingBottom: 16,
+    gap: 12,
   },
   rejectButton: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 8,
-    paddingVertical: 12,
+    backgroundColor: '#F1F5F9',
+    borderRadius: radii.md,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginRight: 10,
   },
   rejectButtonText: {
-    color: colors.badgeRed,
+    color: '#EF4444',
     fontSize: 15,
     fontWeight: '600',
   },
   approveButton: {
     flex: 1,
     backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
+    borderRadius: radii.md,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginLeft: 10,
+    ...shadows.subtle,
   },
   approveButtonText: {
-    color: colors.textInverse,
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
   },

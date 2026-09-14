@@ -8,6 +8,8 @@ import {
   StyleSheet,
 } from 'react-native';
 import { colors } from '../../../theme/colors';
+import { Icon } from '../../../components/common/Icon';
+import { radii, shadows } from '../../../theme/design';
 import { SocialContractService } from '../SocialContractService';
 import type { Contact, Group } from '../../../types';
 
@@ -42,14 +44,17 @@ export const ContactsScreen: React.FC<ContactsScreenProps> = ({
   const renderHeader = () => (
     <View>
       <View style={styles.searchBarContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search friends, ENS, or 0x address"
-          placeholderTextColor={colors.textTertiary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          testID="contacts-search-input"
-        />
+        <View style={styles.searchInputWrapper}>
+          <Icon name="search" size={16} color="#94A3B8" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search friends, ENS, or 0x address"
+            placeholderTextColor="#94A3B8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            testID="contacts-search-input"
+          />
+        </View>
       </View>
 
       <View style={styles.quickEntryRow}>
@@ -57,22 +62,26 @@ export const ContactsScreen: React.FC<ContactsScreenProps> = ({
           style={styles.quickEntryItem}
           onPress={onOpenNewFriends}
           testID="btn-new-friends"
+          activeOpacity={0.7}
         >
           <View style={[styles.quickEntryIcon, { backgroundColor: '#FA9D3B' }]}>
-            <Text style={styles.quickEntryEmoji}>👋</Text>
+            <Icon name="user-plus" size={22} color="#FFFFFF" strokeWidth={2.3} />
           </View>
           <Text style={styles.quickEntryLabel}>New Friends</Text>
+          <Icon name="chevron-right" size={16} color="#CBD5E1" style={styles.chevron} />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.quickEntryItem}
           onPress={onOpenGroupChats}
           testID="btn-group-chats"
+          activeOpacity={0.7}
         >
           <View style={[styles.quickEntryIcon, { backgroundColor: '#07C160' }]}>
-            <Text style={styles.quickEntryEmoji}>👥</Text>
+            <Icon name="contacts" size={22} color="#FFFFFF" strokeWidth={2.3} />
           </View>
           <Text style={styles.quickEntryLabel}>Group Chats ({groups.length})</Text>
+          <Icon name="chevron-right" size={16} color="#CBD5E1" style={styles.chevron} />
         </TouchableOpacity>
       </View>
     </View>
@@ -94,6 +103,7 @@ export const ContactsScreen: React.FC<ContactsScreenProps> = ({
             style={styles.contactItem}
             onPress={() => onSelectContact(item)}
             testID={`contact-item-${item.address}`}
+            activeOpacity={0.7}
           >
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
@@ -123,25 +133,34 @@ export const ContactsScreen: React.FC<ContactsScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
   },
   searchBarContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: radii.md,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.backgroundLight,
+    height: 38,
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
-    backgroundColor: colors.surface,
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    flex: 1,
     fontSize: 14,
-    color: colors.textPrimary,
+    color: '#0F172A',
+    height: '100%',
   },
   quickEntryRow: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
   },
   quickEntryItem: {
     flexDirection: 'row',
@@ -149,67 +168,73 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
   },
   quickEntryIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-  },
-  quickEntryEmoji: {
-    fontSize: 20,
+    marginRight: 14,
+    ...shadows.subtle,
   },
   quickEntryLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: colors.textPrimary,
+    color: '#0F172A',
+    flex: 1,
+  },
+  chevron: {
+    marginLeft: 8,
   },
   sectionHeader: {
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 16,
-    paddingVertical: 4,
+    paddingVertical: 5,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0, 0, 0, 0.04)',
   },
   sectionHeaderText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    fontWeight: '700',
+    color: '#64748B',
   },
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: colors.surface,
+    paddingVertical: 11,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-    backgroundColor: '#E6F4EA',
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#E0F2FE',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   avatarText: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.primary,
+    color: '#0284C7',
   },
   contactInfo: {
     flex: 1,
   },
   contactName: {
     fontSize: 16,
-    color: colors.textPrimary,
+    fontWeight: '500',
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
   contactSubText: {
     fontSize: 12,
-    color: colors.textTertiary,
+    color: '#94A3B8',
     marginTop: 2,
   },
   emptyContainer: {
@@ -218,6 +243,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: '#64748B',
   },
 });

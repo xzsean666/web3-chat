@@ -8,6 +8,8 @@ import {
   StyleSheet,
 } from 'react-native';
 import { colors } from '../../../theme/colors';
+import { Icon, type IconName } from '../../../components/common/Icon';
+import { radii, shadows } from '../../../theme/design';
 
 export interface DAppItem {
   id: string;
@@ -15,6 +17,9 @@ export interface DAppItem {
   category: string;
   url: string;
   icon: string;
+  iconName?: IconName;
+  iconColor?: string;
+  iconBg?: string;
   description: string;
 }
 
@@ -25,6 +30,9 @@ export const FEATURED_DAPPS: DAppItem[] = [
     category: 'DeFi & Social',
     url: 'https://luckydrop.io',
     icon: '🧧',
+    iconName: 'gift',
+    iconColor: '#FA4E38',
+    iconBg: '#FFF1F2',
     description: 'Constant gas Merkle token red packets on BSC',
   },
   {
@@ -33,6 +41,9 @@ export const FEATURED_DAPPS: DAppItem[] = [
     category: 'DEX',
     url: 'https://pancakeswap.finance',
     icon: '🥞',
+    iconName: 'coins',
+    iconColor: '#D97706',
+    iconBg: '#FEF3C7',
     description: 'Top decentralized exchange and automated market maker',
   },
   {
@@ -41,6 +52,9 @@ export const FEATURED_DAPPS: DAppItem[] = [
     category: 'Explorer',
     url: 'https://testnet.bscscan.com',
     icon: '🔍',
+    iconName: 'search',
+    iconColor: '#0284C7',
+    iconBg: '#E0F2FE',
     description: 'Official block explorer for BNB Smart Chain Testnet',
   },
   {
@@ -49,6 +63,9 @@ export const FEATURED_DAPPS: DAppItem[] = [
     category: 'Tools',
     url: 'https://www.bnbchain.org/en/testnet-faucet',
     icon: '🚰',
+    iconName: 'sparkles',
+    iconColor: '#059669',
+    iconBg: '#ECFDF5',
     description: 'Free testnet tBNB tokens for builders and testing',
   },
 ];
@@ -73,19 +90,22 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onOpenUrl }) => 
     <ScrollView style={styles.container} testID="discover-screen">
       {/* URL search bar */}
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Enter DApp URL (e.g. pancakeswap.finance)"
-          placeholderTextColor={colors.textTertiary}
-          value={urlInput}
-          onChangeText={setUrlInput}
-          onSubmitEditing={handleGo}
-          autoCapitalize="none"
-          autoCorrect={false}
-          testID="dapp-url-input"
-        />
+        <View style={styles.searchInputWrapper}>
+          <Icon name="globe" size={16} color="#94A3B8" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Enter DApp URL (e.g. pancakeswap.finance)"
+            placeholderTextColor="#94A3B8"
+            value={urlInput}
+            onChangeText={setUrlInput}
+            onSubmitEditing={handleGo}
+            autoCapitalize="none"
+            autoCorrect={false}
+            testID="dapp-url-input"
+          />
+        </View>
         {urlInput.trim().length > 0 && (
-          <TouchableOpacity style={styles.goButton} onPress={handleGo} testID="btn-go-dapp">
+          <TouchableOpacity style={styles.goButton} onPress={handleGo} testID="btn-go-dapp" activeOpacity={0.8}>
             <Text style={styles.goButtonText}>Go</Text>
           </TouchableOpacity>
         )}
@@ -104,8 +124,12 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onOpenUrl }) => 
               activeOpacity={0.7}
               testID={`dapp-card-${dapp.id}`}
             >
-              <View style={styles.dappIconContainer}>
-                <Text style={styles.dappIcon}>{dapp.icon}</Text>
+              <View style={[styles.dappIconContainer, { backgroundColor: dapp.iconBg || '#F1F5F9' }]}>
+                {dapp.iconName ? (
+                  <Icon name={dapp.iconName} size={24} color={dapp.iconColor || colors.primary} strokeWidth={2.2} />
+                ) : (
+                  <Text style={styles.dappIcon}>{dapp.icon}</Text>
+                )}
               </View>
 
               <View style={styles.dappInfo}>
@@ -117,6 +141,8 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onOpenUrl }) => 
                   {dapp.description}
                 </Text>
               </View>
+
+              <Icon name="chevron-right" size={16} color="#CBD5E1" style={styles.arrow} />
             </TouchableOpacity>
           ))}
         </View>
@@ -128,71 +154,86 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onOpenUrl }) => 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
   searchContainer: {
     flexDirection: 'row',
-    padding: 12,
-    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  searchInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: radii.md,
+    paddingHorizontal: 12,
+    height: 40,
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    height: 40,
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 8,
-    paddingHorizontal: 12,
     fontSize: 14,
-    color: colors.textPrimary,
+    color: '#0F172A',
+    height: '100%',
   },
   goButton: {
-    marginLeft: 8,
+    marginLeft: 10,
     backgroundColor: colors.primary,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     height: 40,
-    borderRadius: 8,
+    borderRadius: radii.md,
     justifyContent: 'center',
     alignItems: 'center',
+    ...shadows.subtle,
   },
   goButtonText: {
-    color: colors.textInverse,
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontWeight: '600',
     fontSize: 14,
   },
   section: {
     padding: 16,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    color: colors.textSecondary,
+    color: '#64748B',
     marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   dappList: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.lg,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    ...shadows.card,
   },
   dappCard: {
     flexDirection: 'row',
     padding: 16,
     alignItems: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
   },
   dappIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 12,
-    backgroundColor: colors.backgroundLight,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
   },
   dappIcon: {
-    fontSize: 26,
+    fontSize: 24,
   },
   dappInfo: {
     flex: 1,
@@ -206,20 +247,24 @@ const styles = StyleSheet.create({
   dappName: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
   dappCategory: {
     fontSize: 11,
     color: colors.primaryDark,
-    backgroundColor: '#E8F8F0',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: radii.sm,
     fontWeight: '600',
   },
   dappDesc: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    lineHeight: 16,
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  arrow: {
+    marginLeft: 8,
   },
 });
