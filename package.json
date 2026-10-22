@@ -33,7 +33,7 @@
     "@babel/runtime": "^8.0.5",
     "@cloudflare/workers-types": "^5.20260911.1",
     "@expo/metro-runtime": "~4.0.1",
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.5",
     "@types/react": "~18.3.12",
     "@types/react-native": "~0.72.8",
     "@web3-chat/sdk": "file:../web3-chat-contract/sdk",
